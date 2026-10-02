@@ -130,39 +130,66 @@ _BINARY_EXTS = (".pdf", ".png", ".jpg", ".jpeg", ".gif", ".zip", ".docx", ".pptx
                 ".xlsx", ".ico", ".ttf", ".woff", ".woff2", ".pyc")
 
 
+def _git_available(root):
+    """git 是否可用（可执行 + 当前目录属于工作树）。不可用 → 调用方必须显式记录，
+    不得静默当成"扫过了但没发现问题"（C4 fail-open 修复，2026-10-02）。"""
+    try:
+        p = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], cwd=root,
+                           capture_output=True, timeout=60)
+        return p.returncode == 0 and b"true" in (p.stdout or b"")
+    except Exception:
+        return False
+
+
 def _iter_git_tracked(root):
+    """产出 (name, text, ok)。ok=False 表示该条目未能读取其内容。
+
+    调用方以返回值统计 scanned/unavailable——**不得**把"读不到"算作"扫过了"。
+    """
     try:
         out = subprocess.run(["git", "ls-files", "-z"], cwd=root, capture_output=True,
                              timeout=60)
+        if out.returncode != 0:
+            raise RuntimeError(f"git ls-files rc={out.returncode}")
         files = [f for f in out.stdout.decode("utf-8", "replace").split("\0") if f]
-    except Exception:
-        return
+    except Exception as e:
+        raise RuntimeError(f"repo scope 不可用：git ls-files 失败（{e}）")
     for f in files:
         p = os.path.join(root, f)
         if os.path.isfile(p):
             if f.lower().endswith(_BINARY_EXTS):
                 # 二进制：只扫文件名（Key 也可能藏在文件名里）；
                 # 文本层（docx/pdf）由 artifacts scope 负责提取扫描。
-                yield f + " (name-only)", f
+                yield f + " (name-only)", f, True
                 continue
             try:
-                yield f, open(p, encoding="utf-8", errors="replace").read()
-            except OSError:
-                pass
+                yield f, open(p, encoding="utf-8", errors="replace").read(), True
+            except OSError as e:
+                yield f + " (unreadable)", "", False    # 读失败不计入 scanned
+        else:
+            yield f + " (missing)", "", False
 
 
 def _iter_staged_diff(root):
+    """产出 (name, text, ok)。git 不可用 → 抛错，由 run() 记为 unavailable scope。"""
     try:
         out = subprocess.run(["git", "diff", "--cached", "-U0"], cwd=root,
                              capture_output=True, text=True, encoding="utf-8",
                              errors="replace", timeout=60)
-        yield "git:staged-diff", out.stdout
-    except Exception:
-        pass
+        if out.returncode != 0:
+            raise RuntimeError(f"git diff rc={out.returncode}")
+        yield "git:staged-diff", out.stdout, True
+    except RuntimeError:
+        raise
+    except Exception as e:
+        raise RuntimeError(f"diff scope 不可用：git diff 失败（{e}）")
 
 
 def _iter_artifacts(root):
+    """产出 (name, text, ok)。文档文本层提取失败 → ok=False（不计入 scanned）。"""
     am = os.path.join(root, ".aeromech")
+    if not os.path.isdir(am):
+        raise RuntimeError(f"artifacts scope 不可用：{am} 不存在")
     for dirpath, _dirs, files in os.walk(am):
         for fn in files:
             p = os.path.join(dirpath, fn)
@@ -170,11 +197,11 @@ def _iter_artifacts(root):
             if fn.endswith((".yaml", ".yml", ".json", ".md", ".txt", ".jsonl",
                             ".log", ".csv")):
                 try:
-                    yield rel, open(p, encoding="utf-8", errors="replace").read()
+                    yield rel, open(p, encoding="utf-8", errors="replace").read(), True
                 except OSError:
-                    pass
+                    yield rel + " (unreadable)", "", False
             elif fn.endswith((".docx", ".pdf", ".png", ".jpg", ".jpeg")):
-                yield rel + " (name-only)", rel          # 文件名本身也可能带 Key
+                yield rel + " (name-only)", rel, True    # 文件名本身也可能带 Key
     for cand in ("毕业论文.docx", "毕业论文.pdf"):
         p = os.path.join(root, cand)
         if not os.path.isfile(p):
@@ -183,7 +210,7 @@ def _iter_artifacts(root):
             if cand.endswith(".pdf"):
                 import pymupdf
                 doc = pymupdf.open(p)
-                yield cand, "\n".join(doc[i].get_text() for i in range(len(doc)))
+                yield cand, "\n".join(doc[i].get_text() for i in range(len(doc))), True
             else:
                 import docx as _docx
                 d = _docx.Document(p)
@@ -192,27 +219,83 @@ def _iter_artifacts(root):
                     for r in t.rows:
                         for c in r.cells:
                             txt += "\n" + c.text
-                yield cand, txt
+                yield cand, txt, True
         except Exception as e:
-            yield cand + " (unreadable)", ""
+            # 文本层提不出来 = 该交付物**未被扫描**（旧实现 yield 空串并计入"已扫"，
+            # 使 docx/pdf 里真藏的 Key 无声漏过）。记 unreadable 并由 run() 判非 PASS。
+            yield cand + " (unreadable)", "", False
 
 
 def run(root, scope="all"):
+    """扫描并返回结果。
+
+    C4/H9（2026-10-02）：**任一适用 scope 无法扫描 → 非 PASS**。
+    结果字段：
+      status            PASS / WARN / FAIL / UNAVAILABLE
+      scanned_files     实际读入内容并扫描的文件数（不含只扫文件名的条目）
+      named_only        仅扫描了文件名（二进制/图片）的条目数
+      unavailable_scopes 明确无法扫描的 scope 列表（含原因）
+      unreadable_files  读取内容失败的条目（不计入 scanned_files）
+    """
     all_hits = []
+    scanned_files = 0
+    named_only = 0
+    unreadable = []
+    unavailable = []
+
+    def _consume(scope_name, it):
+        nonlocal scanned_files, named_only
+        try:
+            for name, txt, ok in it:
+                if not ok:
+                    unreadable.append(f"{scope_name}:{name}")
+                    continue
+                if name.endswith(" (name-only)"):
+                    named_only += 1
+                else:
+                    scanned_files += 1
+                all_hits.extend(scan_text(txt, name,
+                                          exempt_lines=_exempt_for(name, txt)
+                                          if scope_name == "repo"
+                                          else _diff_exempt(txt)
+                                          if scope_name == "diff" else False))
+        except RuntimeError as e:
+            unavailable.append(str(e))
+        except Exception as e:                       # noqa: BLE001 - 一律记不可用
+            unavailable.append(f"{scope_name} scope 不可用：{type(e).__name__}: {e}")
+
     if scope in ("repo", "all"):
-        for name, txt in _iter_git_tracked(root):
-            all_hits += scan_text(txt, name, exempt_lines=_exempt_for(name, txt))
+        if not _git_available(root):
+            unavailable.append("repo scope 不可用：git 不可用或当前目录非工作树")
+        else:
+            _consume("repo", _iter_git_tracked(root))
     if scope in ("diff", "all"):
-        for name, txt in _iter_staged_diff(root):
-            all_hits += scan_text(txt, name, exempt_lines=_diff_exempt(txt))
+        if not _git_available(root):
+            unavailable.append("diff scope 不可用：git 不可用或当前目录非工作树")
+        else:
+            _consume("diff", _iter_staged_diff(root))
     if scope in ("artifacts", "all"):
-        for name, txt in _iter_artifacts(root):
-            all_hits += scan_text(txt, name)
+        _consume("artifacts", _iter_artifacts(root))
+
     fails = [h for h in all_hits if h[1] == "FAIL"]
     warns = [h for h in all_hits if h[1] == "WARN"]
-    return {"status": "FAIL" if fails else ("WARN" if warns else "PASS"),
+    # 判定优先级：发现真实凭据(FAIL) > 扫描面不可用(UNAVAILABLE) > 高熵可疑(WARN) > PASS
+    # 注意：UNAVAILABLE 高于 WARN/PASS——"没扫到"绝不等于"没问题"。
+    if fails:
+        status = "FAIL"
+    elif unavailable or unreadable:
+        status = "UNAVAILABLE"
+    elif warns:
+        status = "WARN"
+    else:
+        status = "PASS"
+    return {"status": status,
             "failures": fails[:40], "warnings": warns[:20],
-            "scanned_scope": scope}
+            "scanned_scope": scope,
+            "scanned_files": scanned_files,
+            "named_only": named_only,
+            "unavailable_scopes": unavailable,
+            "unreadable_files": unreadable[:20]}
 
 
 def main():
@@ -233,7 +316,15 @@ def main():
         os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
         lines = ["# Secret Leak QA（v1.6.5）", "",
                  f"- SEC-SCAN 凭据泄漏扫描: {res['status']} | scope={res['scanned_scope']} "
+                 f"scanned_files={res['scanned_files']} named_only={res['named_only']} "
                  f"FAIL={len(res['failures'])} WARN={len(res['warnings'])}"]
+        if res.get("unavailable_scopes"):
+            for u in res["unavailable_scopes"]:
+                lines.append(f"  - [UNAVAILABLE] {u}")
+        if res.get("unreadable_files"):
+            lines.append(f"  - [UNAVAILABLE] 内容不可读 "
+                         f"{len(res['unreadable_files'])} 个："
+                         + ", ".join(res["unreadable_files"][:6]))
         for k, sev, name, snip in res["failures"]:
             lines.append(f"  - [FAIL] {k} @ {name}: {snip}")
         for k, sev, name, snip in res["warnings"]:
@@ -241,9 +332,13 @@ def main():
         with io.open(a.out, "w", encoding="utf-8") as f:
             f.write("\n".join(lines) + "\n")
     print(json.dumps(res, ensure_ascii=False, indent=1) if a.json
-          else f"secret-leak: {res['status']} (fail={len(res['failures'])} "
-               f"warn={len(res['warnings'])})")
-    return {"PASS": 0, "WARN": 2, "FAIL": 1}[res["status"]]
+          else f"secret-leak: {res['status']} (scanned={res['scanned_files']} "
+               f"fail={len(res['failures'])} warn={len(res['warnings'])}"
+               + (f" unavailable={len(res['unavailable_scopes'])}"
+                  if res.get("unavailable_scopes") else "") + ")")
+    # 退出码：0=无发现；1=FAIL（真实凭据）；2=WARN；3=不可用/内部错误
+    # C4：UNAVAILABLE 不得返回 0（旧实现"扫不了"也返回 0 = 假 PASS）。
+    return {"PASS": 0, "WARN": 2, "FAIL": 1, "UNAVAILABLE": 3}[res["status"]]
 
 
 if __name__ == "__main__":
