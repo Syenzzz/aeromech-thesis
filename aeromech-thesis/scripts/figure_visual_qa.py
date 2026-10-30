@@ -91,8 +91,8 @@ def _ink_ratio(png, dpi_box=None):
     try:
         import numpy as np
         from PIL import Image
-        im = Image.open(png).convert("L")
-        a = np.array(im)
+        with Image.open(png) as im:
+            a = np.array(im.convert("L"))
         if dpi_box:  # 下采样控制成本
             h, w = a.shape
             step = max(1, int(w / 1400))
@@ -107,7 +107,8 @@ def _load_layouts(figdir):
     for p in sorted(glob.glob(os.path.join(figdir, "*.layout.json"))) + \
             sorted(glob.glob(os.path.join(figdir, "**", "*.layout.json"), recursive=True)):
         try:
-            m = json.load(open(p, encoding="utf-8"))
+            with open(p, encoding="utf-8") as f:
+                m = json.load(f)
         except Exception:
             continue
         key = re.sub(r"\.layout\.json$", "", os.path.basename(p))
@@ -168,7 +169,7 @@ def vis_02_density(rep, key, meta, png, ftype):
     cap = (ST.FIGURE_TYPES.get(ftype, {}) or {}).get("max_nodes", ST.SPACING["max_nodes"])
     ink = _ink_ratio(png) if png and os.path.isfile(png) else None
     probs = []
-    if n > cap:
+    if meta.get('figure_kind') != 'table' and n > cap:
         probs.append(f"节点 {n}>{cap}")
     if ink is not None and ink > ST.SPACING["max_ink_ratio"]:
         probs.append(f"ink {ink:.2f}>{ST.SPACING['max_ink_ratio']}")
@@ -177,7 +178,7 @@ def vis_02_density(rep, key, meta, png, ftype):
         return
     rep.add("VIS-02", "Information Density", PASS if not probs else FAIL,
             "high" if probs else "none", key,
-            f"节点={n}(≤{cap}) ink={f'{ink:.2f}' if ink is not None else 'n/a'}"
+            (f"单元格={n}（按像素密度检查）" if meta.get('figure_kind') == 'table' else f"节点={n}(≤{cap})") + f" ink={f'{ink:.2f}' if ink is not None else 'n/a'}"
             + ("；" + "，".join(probs) if probs else ""),
             "" if not probs else "拆分为多张图 / 合并次要节点 / 增大画布后重排")
 
@@ -383,7 +384,10 @@ def vis_10_pdf_readability(rep, key, meta, pdf_path, used=None):
                 continue
             if abs(w_cm / h_cm - want_aspect) / want_aspect > 0.15:
                 continue
-            if abs(w_cm - Wc) > 1.5 and abs(w_cm - Wc * 0.87) > 1.5:
+            same_pixels = (meta.get('pixel_width') is not None and
+                           abs(im.get('width', 0) - meta['pixel_width']) <= 2 and
+                           abs(im.get('height', 0) - meta['pixel_height']) <= 2)
+            if not same_pixels and abs(w_cm - Wc) > 1.5 and abs(w_cm - Wc * 0.87) > 1.5:
                 continue
             found = (pg, w_cm, b)
             used.add((pg, round(b[0], 1), round(b[1], 1)))
@@ -391,6 +395,7 @@ def vis_10_pdf_readability(rep, key, meta, pdf_path, used=None):
         if found:
             break
     if not found:
+        doc.close()
         rep.add("VIS-10", "PDF Readability", NHR, "high", key,
                 "PDF 中未匹配到该图（可能未嵌入或尺寸漂移）",
                 "确认 figure_block 嵌入与占位行命中")
@@ -476,13 +481,17 @@ def run(figdir, pdf=None, plan=None, out="."):
     if plan and os.path.isfile(plan):
         try:
             import yaml
-            data = yaml.safe_load(open(plan, encoding="utf-8")) or {}
+            with open(plan, encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
             for sp in data.get("figures") or []:
                 types[str(sp.get("figure_id"))] = sp.get("type")
                 fid = str(sp.get("figure_id"))
                 nm = str(sp.get("name") or "")
                 if fid not in layouts and nm in layouts:
                     types.setdefault(nm, sp.get("type"))
+                out_name = os.path.splitext(os.path.basename(str(sp.get('out') or '')))[0]
+                if out_name in layouts:
+                    types.setdefault(out_name, sp.get('type'))
         except Exception:
             pass
     if not layouts:
@@ -501,9 +510,9 @@ def run(figdir, pdf=None, plan=None, out="."):
         if png:
             try:
                 from PIL import Image
-                im = Image.open(png)
-                disp = (ST.FIGURE_SIZE_PRESETS["full_width"]["display_w_cm"]
-                        / (im.size[0] / im.info.get("dpi", (220, 220))[0] * 2.54))
+                with Image.open(png) as im:
+                    disp = (ST.FIGURE_SIZE_PRESETS["full_width"]["display_w_cm"]
+                            / (im.size[0] / im.info.get("dpi", (220, 220))[0] * 2.54))
                 scale = min(1.0, disp)
             except Exception:
                 pass

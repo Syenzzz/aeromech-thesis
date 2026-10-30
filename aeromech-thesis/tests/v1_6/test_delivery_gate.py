@@ -77,7 +77,8 @@ def full_pass_env(root):
                       ("figure-table-report.md", "FIG-01 图片存在"),
                       ("graph-quality-report.md", "GQ-01 节点无重叠"),
                       ("figure-visual-report.md", "VIS-01 Layout Balance"),
-                      ("table-readability-report.md", "TR-01 逐表可读")]:
+                      ("table-readability-report.md", "TR-01 逐表可读"),
+                      ("secret-leak-report.md", "SEC-SCAN 凭据泄漏扫描")]:
         qa_file(root, _f, base_report([(_code, "PASS", "ok")]))
     # pipeline 步骤（manifest meta.steps）
     w(root, "build-contract.yaml", yaml.safe_dump({

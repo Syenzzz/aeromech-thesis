@@ -67,6 +67,8 @@ FORMAT_REPORTS = [
     ("figure-visual-report.md", "figure_visual", None),   # v1.6.5 VIS-01~12（几何过≠视觉过）
     ("table-readability-report.md", "table", None),
     ("content-purity-report.md", "content_purity", None),
+    # C4/H9（2026-10-02）：凭据泄漏扫描入交付门禁——"未扫描"不得被当成"无泄漏"。
+    ("secret-leak-report.md", "secret_leak", None),
 ]
 # 无 md 报告、按 manifest 步骤记录入域的步：(步名, 域, FAIL 默认严重度)
 STEP_DOMAINS = [
@@ -79,7 +81,7 @@ STEP_DOMAINS = [
 ]
 ITEM_RE = re.compile(
     r"^- (.+?)[:：] ?(PASS|FAIL|SKIP|NOT_APPLICABLE|SKIPPED_WITH_REASON"
-    r"|NEEDS_HUMAN_REVIEW|WARN)(?: ?\[[a-z]+\])? ?\| ?(.*)$")
+    r"|NEEDS_HUMAN_REVIEW|WARN|UNAVAILABLE)(?: ?\[[a-z]+\])? ?\| ?(.*)$")
 
 
 def parse_format_report(path, domain):
@@ -106,14 +108,20 @@ def parse_format_report(path, domain):
     nhrs = [c for c, st, e in items if st == "NEEDS_HUMAN_REVIEW"]
     warns = [c for c, st, e in items if st == "WARN"]
     skips = [c for c, st, e in items if st == "SKIPPED_WITH_REASON"]
-    # 域终局（与全局聚合规则同序：ERROR>Critical/High FAIL(BLOCK)>NHR>WARN>SKIP>PASS）：
+    unavail = [c for c, st, e in items if st == "UNAVAILABLE"]
+    # 域终局（与全局聚合规则同序：
+    #   ERROR > Critical/High FAIL(BLOCK) > UNAVAILABLE > NHR > WARN > SKIP > PASS）：
     # ① NHR/WARN 不得记 PASS（v1.6.5：figure_visual 会产出这两态，旧实现把它们当不匹配行
     #    静默丢弃→假 PASS 泄漏）；
     # ② SKIPPED_WITH_REASON 是"未执行/条件不满足"，既非 PASS 也非 N/A：只有全 SKIP 才可
     #    归 N/A（此时域内确实无任何可判定项），**混合报告中存在 SKIP 即不得记 PASS**
-    #    （否则 GQ-15 这类刻意改成 skip 的人工项会被洗成通过）。
+    #    （否则 GQ-15 这类刻意改成 skip 的人工项会被洗成通过）；
+    # ③ UNAVAILABLE（C4/H9）：扫描面不可用——"没能扫描"绝不等于"没有问题"，
+    #    一律记 ERROR（终局不透 PASS），与"未执行≠通过"纪律一致。
     if fails:
         status = "FAIL"
+    elif unavail:
+        status = "UNAVAILABLE"
     elif len(nas) + len(skips) == len(items):
         status = "NOT_APPLICABLE"
     elif nhrs:
@@ -127,6 +135,7 @@ def parse_format_report(path, domain):
     return {"domain": domain, "status": status,
             "failures": [{"code": c, "evidence": e[:140]} for c, e in fails],
             "needs_human_review": nhrs, "warnings": warns, "skips": skips,
+            "unavailable": unavail,
             "not_applicable": nas, "evidence": [path], "checks": len(items)}
 
 
@@ -237,6 +246,11 @@ def aggregate(root, write=False):
             add(f"G-FMT-{domain}", domain, "FAIL", "high", rep["evidence"],
                 f"{len(rep['failures'])}/{rep['checks']} 项 FAIL: "
                 + "; ".join(x["code"] for x in rep["failures"][:6]), REMEDIATION["high"])
+        elif rep["status"] == "UNAVAILABLE":
+            # C4/H9：扫描面不可用 → ERROR（终局透 BLOCK，不透 PASS）。
+            add(f"G-FMT-{domain}", domain, "ERROR", "critical", rep["evidence"],
+                f"扫描面不可用（{'、'.join(rep.get('unavailable', [])) or '内容不可读'}）："
+                f"未能完成扫描 ≠ 无问题", REMEDIATION["error"])
         elif rep["status"] == "NOT_APPLICABLE":
             add(f"G-FMT-{domain}", domain, "NOT_APPLICABLE", "none", rep["evidence"],
                 f"{len(rep['not_applicable'])} 项全部 N/A（条件不适用，不伪造 PASS）", "")

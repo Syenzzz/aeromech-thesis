@@ -20,6 +20,8 @@ TESTS = [
     "test_image_fallback.py",
     "test_image_security.py",
     "test_image_external.py",
+    # C4/H9（2026-10-02）：凭据扫描 fail-closed（扫描面不可用不得伪装 PASS）
+    "test_secret_leak_failclosed.py",
 ]
 
 

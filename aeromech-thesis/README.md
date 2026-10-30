@@ -300,7 +300,11 @@ mmdc 失败 → FIGURE_ERROR（退出码 2）→ 生命周期记 REJECTED → �
 
 ## 11. 当前版本
 
-**aeromech-thesis v1.6.5（Academic Figure Quality & User-Configured Image Provider）**
+**aeromech-thesis v1.7.0（统一论文配图工作流）**
+
+配图流程及依赖见 `references/figure-workflow.md` 和 `scripts/requirements-figure.txt`。支持逐图确认、项目级外部调用额度、可编辑 PowerPoint 和高清图片；复杂工程图仍须按资料和规范人工复核。
+
+历史版本：**aeromech-thesis v1.6.5（Academic Figure Quality & User-Configured Image Provider）**
 
 > v1.6.5 已发布（分支 feature-1.6.5-figure-optimization，经全回归 + test-8.0 全 QA +
 > Delivery Gate=PASS + secret_leak_qa FAIL=0 后从 v1.6.0 升级）。学术图形质量与用户自配
@@ -476,7 +480,7 @@ Skill：正在登记材料...
 
 ## 15. README 的原则
 
-本 README 描述的是 **aeromech-thesis v1.6.5** 当前已实现的能力。任何未来功能必须先实现并通过测试，再更新 README，不得为了宣传而提前声明未实现功能。
+本 README 描述的是 **aeromech-thesis v1.7.0** 当前已实现的能力。任何未来功能必须先实现并通过测试，再更新 README，不得为了宣传而提前声明未实现功能。
 
 如发现本文档与实际实现不一致，请以实际实现为准。欢迎反馈文档错误。
 

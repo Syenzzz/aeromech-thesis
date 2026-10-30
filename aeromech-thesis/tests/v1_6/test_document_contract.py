@@ -67,12 +67,12 @@ def main():
 
     # ---------- DOC-01 版本声明（发布态：v1.6.5 为正式版） ----------
     v_skill = re.search(r"版本：v([0-9.]+)", skill)
-    check("DOC-01 SKILL 正式版本=1.6.5（v1.6.5 Release 已升级）",
-          v_skill and v_skill.group(1) == "1.6.5", str(v_skill and v_skill.group(1)))
+    check("DOC-01 SKILL 当前版本=1.7.0",
+          v_skill and v_skill.group(1) == "1.7.0", str(v_skill and v_skill.group(1)))
     skill_f = flat(skill)
     check("DOC-01 SKILL 不再含 v1.6.5 开发中/未发布措辞",
           "v1.6.5 开发中" not in skill_f and "不视为 v1.6.0 交付承诺" not in skill_f)
-    check("DOC-01 README 当前版本声明为 aeromech-thesis v1.6.5",
+    check("DOC-01 README 保留 v1.6.5 历史版本声明",
           re.search(r"aeromech-thesis v1\.6\.5", readme) is not None)
     check("DOC-01 README §11 声明 v1.6.5 已发布且含发布验证（test-8.0/Delivery Gate）",
           "v1.6.5 已发布" in readme and "test-8.0" in readme and "Delivery Gate" in readme)
@@ -81,9 +81,9 @@ def main():
 
     # ---------- DOC-02 CHANGELOG（发布态：v1.6.5 为顶部正式条目） ----------
     head = changelog.split("\n## ", 2)
-    check("DOC-02 CHANGELOG 顶部条目=v1.6.5 正式 release（不再是 [Unreleased]）",
-          head[1].startswith("v1.6.5 —"), head[1][:30])
-    check("DOC-02 v1.6.5 为最新正式发布条目",
+    check("DOC-02 CHANGELOG 顶部条目=v1.7.0",
+          head[1].startswith("v1.7.0 —"), head[1][:30])
+    check("DOC-02 v1.6.5 历史发布条目保留",
           re.search(r"^## v1\.6\.5", changelog, re.M) is not None)
     clg_f = flat(changelog)
     check("DOC-02 v1.6.5 条目声明已发布且含 test-8.0/Readiness 收口",
@@ -93,7 +93,7 @@ def main():
     cm = re.search(r"^## v(\d+\.\d+\.\d+)", changelog, re.M)
     rm = re.search(r"aeromech-thesis v(\d+\.\d+\.\d+)", readme)
     check("DOC-02 CHANGELOG 最新 release 与 README/SKILL 版本联动一致",
-          cm and rm and v_skill and cm.group(1) == rm.group(1) == v_skill.group(1) == "1.6.5")
+          cm and rm and v_skill and cm.group(1) == rm.group(1) == v_skill.group(1) == "1.7.0")
 
     # ---------- DOC-03 orchestration.md 覆盖 ----------
     need_topics = ["State", "Context", "Route", "Action", "Checkpoint", "Resume", "Recovery",

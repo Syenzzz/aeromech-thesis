@@ -232,7 +232,8 @@ def main():
                            ("graph-quality-report.md", "GQ-01"),
                            ("figure-visual-report.md", "VIS-01"),
                            ("table-readability-report.md", "TR-01"),
-                           ("content-purity-report.md", "MD-01")]:
+                           ("content-purity-report.md", "MD-01"),
+                           ("secret-leak-report.md", "SEC-SCAN 凭据泄漏扫描")]:
         w(r8, "artifacts/qa/" + rep_name, f"- {code}: PASS | ok\n")
     res8 = DG.aggregate(r8)
     chk8 = TB.check_manifest(r8)
