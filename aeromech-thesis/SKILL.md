@@ -89,6 +89,7 @@ description: 航空机械与飞行器维修工程方向的毕业论文/毕业设
 | 图形拓扑质量（Graph Quality） | `scripts/graph_quality_qa.py`（GQ-01~20，含 GQ-00 元数据、GQ-01b 文本溢出）+ `scripts/figkit.py`（绘制+layout 几何元数据，v1.3.3） |
 | 图形视觉质量（Figure Visual QA，v1.6.5） | `scripts/figure_visual_qa.py`（VIS-01~12）+ `scripts/figure_style.py`（学术视觉单一来源）+ `docs/v1.6.5/02~05` 设计文档 |
 | 外部生图（Image Provider，v1.6.5） | `references/image-provider.md`（规则）+ `scripts/image_config.py` / `image_provider.py` / `image_backends.py` / `ai_figure_gate.py` / `image_cli.py` / `secret_leak_qa.py` |
+| 生图服务配置 | `references/figure-workflow.md` 的“外部服务逐步配置”：逐项询问服务商、模型及地址，密钥由用户在本地无回显输入 |
 | 编排层（v1.6.0：状态/断点/调度/恢复/统一构建/门禁聚合） | `references/orchestration.md`（规则总纲）+ `scripts/thesis_state.py` / `material_ingestion.py` / `school_requirements.py` / `research_context.py` / `stage_routing.py` / `thesis_orchestrator.py` / `figure_iface.py` / `thesis_build.py` / `delivery_gate.py` |
 
 ## 4. Master 路由规则
