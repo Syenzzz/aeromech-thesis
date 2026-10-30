@@ -182,11 +182,19 @@ def validate_contract(root, contract=None):
         na.append("学校模板（未提供→FORMAT_RECONSTRUCTION，general_defaults，不冒充模板接管）")
     # 图域
     figs = c.get("figures") or []
+    import figure_review as FR
+    review_enabled = FR.enabled(root)
+    figure_plan = FI.load_plan(root) if review_enabled else None
+    if review_enabled and len({os.path.dirname(os.path.abspath(os.path.join(root, fg.get('file', ''))))
+                               for fg in figs if fg.get('file')}) > 1:
+        errors.append('统一构建要求所有图片位于同一目录')
     fig_na = False
     for fg in figs:
         p = os.path.join(root, fg.get("file", ""))
         if not fg.get("file") or not os.path.isfile(p):
             errors.append(f"figure 文件缺失：{fg.get('figure_id')} {fg.get('file')}")
+        elif review_enabled and not FR.insertion_ready(root, str(fg.get('figure_id')), p, figure_plan or []):
+            errors.append(f"figure 尚未确认或内容已更改：{fg.get('figure_id')}")
     if not figs:
         fig_na = True
         na.append("figures（契约未列：正文含图占位但无文件时按 parse_md 诚实降级）")

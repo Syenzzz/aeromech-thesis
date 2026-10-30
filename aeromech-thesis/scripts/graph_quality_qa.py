@@ -48,7 +48,8 @@ def discover_figs(figdir):
         return figs
     for p in sorted(glob.glob(os.path.join(figdir, "*.layout.json"))):
         try:
-            meta = json.load(open(p, encoding="utf-8"))
+            with open(p, encoding="utf-8") as f:
+                meta = json.load(f)
         except Exception:
             continue
         name = meta.get("name") or os.path.basename(p).replace(".layout.json", "")
@@ -56,7 +57,7 @@ def discover_figs(figdir):
         if not m:
             continue
         key = f"{m.group(1)}-{m.group(2)}"
-        typ = "chart" if ("bars" in meta and "axes_rect" in meta) else "graph"
+        typ = "table" if meta.get("figure_kind") == "table" else ("chart" if ("bars" in meta and "axes_rect" in meta) else "graph")
         png = os.path.join(figdir, name + ".png")
         figs[key] = {"meta": meta, "png": png, "type": typ, "name": name}
     return figs

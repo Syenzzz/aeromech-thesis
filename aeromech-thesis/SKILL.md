@@ -5,7 +5,9 @@ description: 航空机械与飞行器维修工程方向的毕业论文/毕业设
 
 # AeroMech Thesis（AMT）
 
-> 版本：v1.6.5（Academic Figure Quality & User-Configured Image Provider：在 v1.6.0 编排闭环之上，图形质量与可选外部生图——① 学术视觉系统（`figure_style.py` 单一来源：3 轮量化验证的调色板/字号阶梯/间距/图类型；`figkit.py` role= 语义角色色 + style_fingerprint 跨图家族一致；mermaid 回退 fail-closed 不伪造语义，自证式 PASS 移除）；② Visual QA（`figure_visual_qa.py` VIS-01~12：可测项机器判定、主观项→人工复核、分数永不覆盖 Critical；入 thesis_build QA 链 + Delivery Gate figure_visual 域）；③ User-Configured Image Provider（可选增强，零阻塞：`image_config.py` 凭据解析链 process→skill→`~/.aeromech/.env` 用户级、project .env 默认关闭、SecretStr 全掩码；`image_cli.py` config/status/test/remove）；④ OpenAI 兼容外部生图（`image_backends.py`：/images/generations b64、原子落盘、8 类错误分类——401=INVALID_CREDENTIAL 不伪装普通失败；可注入 transport，回归零真实网络）；⑤ No-Key Fallback（无 Key=正常状态自动回落既有 Figure Pipeline，UNAVAILABLE≠错误；旧 spec 零 env 接触与 v1.6.0 字节一致；五类确定性图恒 local 优先）；⑥ 受控 AI 生图（`ai_figure_gate.py`：Figure Plan 九字段前置，缺 Plan=FIGURE_PLAN_REQUIRED+零 HTTP；结构化溯源提示词+prompt_hash；provenance 白名单不含凭据；IMAGE_MAX_ATTEMPTS=3 成本闸+首次费用明示）；⑦ AI 生成视觉≠研究证据（research_integrity：ai_generated_visual 禁 verified/partial，证据种子仅 E/DS/CALC/M）；⑧ Secret Security（`secret_leak_qa.py` repo/diff/artifacts 三 scope，发布态 FAIL=0；record/log 边界 redact）；兼容 v1.0~v1.6.0 全部能力，只增不破；发布验证：tests/v1_6_5 124 断言 + v1_4/v1_4_1/v1_5/v1_6/test_a/test_b 全绿 + test-8.0 全 QA PASS + Delivery Gate=PASS + secret_leak_qa FAIL=0 + dev↔install IDENTICAL；已知限制：LIVE_SMOKE_TEST=NOT_RUN（USER_CREDENTIAL_NOT_PROVIDED，非阻塞））
+> 版本：v1.7.0（统一论文配图工作流；详细能力和限制见 `references/figure-workflow.md`）。
+
+> 历史版本：v1.6.5（Academic Figure Quality & User-Configured Image Provider：在 v1.6.0 编排闭环之上，图形质量与可选外部生图——① 学术视觉系统（`figure_style.py` 单一来源：3 轮量化验证的调色板/字号阶梯/间距/图类型；`figkit.py` role= 语义角色色 + style_fingerprint 跨图家族一致；mermaid 回退 fail-closed 不伪造语义，自证式 PASS 移除）；② Visual QA（`figure_visual_qa.py` VIS-01~12：可测项机器判定、主观项→人工复核、分数永不覆盖 Critical；入 thesis_build QA 链 + Delivery Gate figure_visual 域）；③ User-Configured Image Provider（可选增强，零阻塞：`image_config.py` 凭据解析链 process→skill→`~/.aeromech/.env` 用户级、project .env 默认关闭、SecretStr 全掩码；`image_cli.py` config/status/test/remove）；④ OpenAI 兼容外部生图（`image_backends.py`：/images/generations b64、原子落盘、8 类错误分类——401=INVALID_CREDENTIAL 不伪装普通失败；可注入 transport，回归零真实网络）；⑤ No-Key Fallback（无 Key=正常状态自动回落既有 Figure Pipeline，UNAVAILABLE≠错误；旧 spec 零 env 接触与 v1.6.0 字节一致；五类确定性图恒 local 优先）；⑥ 受控 AI 生图（`ai_figure_gate.py`：Figure Plan 九字段前置，缺 Plan=FIGURE_PLAN_REQUIRED+零 HTTP；结构化溯源提示词+prompt_hash；provenance 白名单不含凭据；IMAGE_MAX_ATTEMPTS=3 成本闸+首次费用明示）；⑦ AI 生成视觉≠研究证据（research_integrity：ai_generated_visual 禁 verified/partial，证据种子仅 E/DS/CALC/M）；⑧ Secret Security（`secret_leak_qa.py` repo/diff/artifacts 三 scope，发布态 FAIL=0；record/log 边界 redact）；兼容 v1.0~v1.6.0 全部能力，只增不破；发布验证：tests/v1_6_5 124 断言 + v1_4/v1_4_1/v1_5/v1_6/test_a/test_b 全绿 + test-8.0 全 QA PASS + Delivery Gate=PASS + secret_leak_qa FAIL=0 + dev↔install IDENTICAL；已知限制：LIVE_SMOKE_TEST=NOT_RUN（USER_CREDENTIAL_NOT_PROVIDED，非阻塞））
 >
 
 航空机械与飞行器维修工程方向的毕业论文研究与写作智能助手。服务对象：飞行器维修工程技术、航空机电设备维修、飞机维修、航空机械、航空制造、飞行器制造、机械工程、机械设计制造等专业的高职/本科学生。
@@ -38,7 +40,7 @@ description: 航空机械与飞行器维修工程方向的毕业论文/毕业设
 | Writing | `references/agents/writing.md` | 章节写作（S7）、图表点位表（S8 轻量版） |
 | Engineering | `references/agents/engineering.md` | S5 工程分析（FMEA/FTA/RCA/有限元流程） |
 | Data | `references/agents/data.md` | S6 数据分析（描述统计/简单分析） |
-| Figure | `references/agents/figure.md` | S8 图表规划与生成（Mermaid/matplotlib 脚本） |
+| Figure | `references/figure-workflow.md` | 论文或单图配图：规划、确认、生成、审核和交付；旧管线见 `references/agents/figure.md` |
 | Cover Fidelity | `references/cover-fidelity.md` | 封面对象树保真（COVER_FIDELITY_MODE / COVER_IMMUTABLE_REGION：零删除/零压缩/图片继承/fill-on-rule 横线保留）与 CF-01~25 QA（v1.3.0，OBS-007/008） |
 | Citation Integrity | `references/agents/citation.md` | 引用链审计（观点→来源→支持度→编号→格式） |
 | QA | `references/agents/qa.md` | S9 论文体检（六大维度检查，四级风险分级） |
@@ -74,7 +76,7 @@ description: 航空机械与飞行器维修工程方向的毕业论文/毕业设
 | 写章节 | `references/agents/writing.md` |
 | 工程分析（FMEA/FTA/有限元） | `references/agents/engineering.md` + `references/knowledge/methods-failure.md` |
 | 数据分析 | `references/agents/data.md` |
-| 图表规划 | `references/agents/figure.md` |
+| 图表规划 | `references/figure-workflow.md` |
 | 引用链审计 | `references/agents/citation.md` |
 | 论文体检 | `references/agents/qa.md` |
 | 答辩准备 | `references/agents/defense.md` |

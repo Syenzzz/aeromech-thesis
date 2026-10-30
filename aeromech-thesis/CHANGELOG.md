@@ -1,5 +1,11 @@
 # CHANGELOG — aeromech-thesis
 
+## v1.7.0 — 统一论文配图工作流
+
+- 新增清单、逐图审核、外部服务项目额度和单独的插入确认；旧图片可以登记后重新确认。
+- 新增可编辑的 PowerPoint 图形、柱线图与表格，支持 PNG 和 SVG 导出及输出清单。
+- 数据和工程关系仍须依据用户材料；复杂故障树或结构图不能准确表达时须人工复核。真实外部图像服务的验证取决于用户配置和授权。
+
 ## v1.6.5 — Academic Figure Quality & User-Configured Image Provider
 
 **状态：已发布（2026-09-19）。发布验证：Phase 0 审计 + Phase 1 学术视觉系统 + Phase 2A 凭据/安全/回落 + Phase 2B 真实 OpenAI 兼容 Provider 与受控 AI 生图（实现+测试）；Release Readiness Check（九项证据 + HEAD 现势复核，RELEASE_READY=YES）+ 最终 Release 回归全绿 + test-8.0 全 QA PASS + Delivery Gate=PASS。tests/v1_6_5 124 断言 + v1_4/v1_4_1/v1_5/v1_6/test_a/test_b 全绿 + secret_leak_qa FAIL=0 + dev↔install IDENTICAL。版本升级 v1.6.0→v1.6.5（test_document_contract 版本态断言同步翻转到 v1.6.5 发布态）。**

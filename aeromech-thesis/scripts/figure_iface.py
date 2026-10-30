@@ -253,11 +253,77 @@ class LocalProvider(FigureProvider):
             return self._gen_mermaid(root, spec, out, rel_out)
         if kind == "script":
             return self._gen_script(root, spec, out, rel_out)
+        if kind in ("editable", "editable_chart", "editable_table"):
+            return self._gen_editable(root, spec, out, rel_out)
         rec = record(root, fid, "NEEDS_HUMAN_REVIEW",
                      reason=f"无法自动出图：kind={kind!r} 无对应生成路径（不产占位图）",
                      provider=self.name)
         return _result(fid, "NEEDS_HUMAN_REVIEW", rel_out, None, rec,
                        reason="无机器生成路径，需人工/协作者 Provider 处理")
+
+    def _gen_editable(self, root, spec, out, rel_out):
+        fid = spec.get("figure_id")
+        source = spec.get("source") or ""
+        path = os.path.realpath(os.path.join(root, source))
+        if not source or os.path.isabs(source) or os.path.commonpath([os.path.realpath(root), path]) != os.path.realpath(root) or not path.lower().endswith('.json'):
+            return _result(fid, "NEEDS_HUMAN_REVIEW", None, None, None, reason="图形源路径无效")
+        try:
+            with open(path, encoding='utf-8') as f:
+                data = json.load(f)
+            if spec.get('type') == 'fault_tree':
+                nodes = data.get('nodes') or []
+                semantics = {node.get('semantic') for node in nodes}
+                gates = [node for node in nodes if node.get('semantic') == 'gate']
+                edges = data.get('edges') or []
+                tops = [node for node in nodes if node.get('semantic') == 'top_event']
+                basics = [node for node in nodes if node.get('semantic') == 'basic_event']
+                if len(tops) != 1 or len(basics) < 2 or not {'top_event', 'gate', 'basic_event'} <= semantics or any(
+                    not re.search(r'(?<![A-Za-z])(?:AND|OR)(?![A-Za-z])', str(gate.get('text', '')), re.I) or
+                    len({edge.get('to') for edge in edges if edge.get('from') == gate.get('id')}) < 2
+                    for gate in gates):
+                    raise ValueError('故障树须提供顶事件、AND/OR 逻辑门及至少两个门输入')
+                children = {node.get('id'): [] for node in nodes}
+                for edge in edges:
+                    if edge.get('from') not in children or edge.get('to') not in children:
+                        raise ValueError('故障树连接引用了不存在的事件')
+                    children[edge['from']].append(edge['to'])
+                visited, active = set(), set()
+                def visit(node):
+                    if node in active:
+                        raise ValueError('故障树包含循环')
+                    if node in visited:
+                        return
+                    active.add(node)
+                    for child in children[node]:
+                        visit(child)
+                    active.remove(node)
+                    visited.add(node)
+                visit(tops[0].get('id'))
+                if len(visited) != len(nodes) or any(children[node.get('id')] for node in basics):
+                    raise ValueError('故障树存在孤立事件或基础事件的子事件')
+            if not out.lower().endswith('.png'):
+                raise ValueError('editable 输出必须为 PNG')
+            if spec.get('kind') == 'editable_chart':
+                import editable_chart as renderer
+            elif spec.get('kind') == 'editable_table':
+                import editable_table as renderer
+            else:
+                import editable_figure as renderer
+            artifacts = renderer.render(data, os.path.splitext(out)[0])
+            from PIL import Image
+            with Image.open(artifacts['png']) as image:
+                dimensions = list(image.size)
+            manifest = {'figure_id': fid, 'generation_method': spec.get('kind'),
+                        'source': source, 'source_sha256': _sha(path),
+                        'artifacts': {kind: {'path': os.path.relpath(p, root).replace('\\', '/'),
+                                             'sha256': _sha(p)} for kind, p in artifacts.items()},
+                        'image_pixels': dimensions, 'editable': 'PowerPoint'}
+            with open(os.path.splitext(out)[0] + '.manifest.json', 'w', encoding='utf-8') as f:
+                json.dump(manifest, f, ensure_ascii=False, indent=2)
+        except (ValueError, OSError, ImportError) as exc:
+            rec = record(root, fid, "REJECTED", reason=str(exc), provider=self.name)
+            return _result(fid, "REJECTED", None, None, rec, reason="可编辑图生成失败")
+        return self._ok(root, fid, rel_out, out, reason="可编辑图生成成功")
 
     def _gen_mermaid(self, root, spec, out, rel_out):
         import render_mermaid as RM
@@ -345,7 +411,28 @@ class LocalProvider(FigureProvider):
             return _result(fid, "NEEDS_HUMAN_REVIEW", rel_out, _sha(out), rec,
                            reason="no layout metadata")
         import graph_quality_qa as GQ
+        if spec.get('kind') in ('editable_table', 'editable_chart'):
+            with open(layout, encoding='utf-8') as f:
+                meta = json.load(f)
+            checks = []
+            for text in meta.get('texts', []):
+                if text.get('box') == '__note__':
+                    within = text['x0'] >= 0 and text['y0'] >= 0 and text['x1'] <= meta['w_cm'] and text['y1'] <= meta['h_cm']
+                else:
+                    box = next((b for b in meta.get('boxes', []) if b['id'] == text['box']), None)
+                    within = bool(box and text['x0'] >= box['x'] and text['y0'] >= box['y'] and text['x1'] <= box['x'] + box['w'] and text['y1'] <= box['y'] + box['h'])
+                checks.append({'code': 'TEXT_BOUNDS', 'ok': within, 'detail': str(text.get('box'))})
+            checks.append({'code': 'MIN_FONT', 'ok': meta.get('min_font_pt', 0) >= 9, 'detail': str(meta.get('min_font_pt'))})
+            failed = any(not check['ok'] for check in checks)
+            status = 'REJECTED' if failed else 'VALIDATED'
+            reason = '文字尺寸或边界检查失败' if failed else '文字尺寸和边界检查通过，仍需 PDF 检查'
+            rec = record(root, fid, status, artifact=rel_out, reason=reason, provider=self.name)
+            return _result(fid, status, rel_out, _sha(out), rec, reason=reason, quality=checks)
         figs = GQ.discover_figs(os.path.dirname(layout))
+        if spec.get('kind') == 'editable':
+            with open(layout, encoding='utf-8') as f:
+                meta = json.load(f)
+            figs = {str(fid): {'meta': meta, 'png': out, 'type': 'graph'}}
         rep = GQ.Report(tempfile.mkdtemp(prefix="figif_"))
         GQ.check_graphs(rep, figs)
         checks = [{"code": c, "ok": ok, "detail": d} for c, ok, d, sk in rep.items
@@ -390,6 +477,11 @@ def generate_figure(root, figure_id, provider="local"):
     if specs is None:
         specs = prov.plan(root)
         save_plan(root, specs, provider=provider)
+    import figure_review
+    if figure_review.enabled(root) and not figure_review.figure_plan_confirmed(root, figure_id, specs):
+        return {"figure_id": figure_id, "status": "NEEDS_HUMAN_REVIEW",
+                "artifact": None, "reason": "PLAN_CONFIRMATION_REQUIRED",
+                "sha256": None, "quality": []}
     for sp in specs:
         if str(sp.get("figure_id")) == figure_id:
             # v1.6.5 Phase 2A fallback 契约（image_provider.route）：
@@ -484,6 +576,10 @@ def _generate_external(root, sp, dec):
     backend = IB.get_backend(dec["external_backend"], dec["credential"],
                              model=dec.get("external_model"),
                              base_url=dec.get("external_base_url"))
+    import figure_review
+    if figure_review.enabled(root) and not figure_review.reserve_external_call(root):
+        return _result(fid, "NEEDS_HUMAN_REVIEW", None, None, None,
+                       reason="EXTERNAL_AUTHORIZATION_OR_BUDGET_REQUIRED")
     prov, _rejected = G.build_provenance(
         plan, provider=dec["external_backend"], model=dec.get("external_model"),
         prompt_hash=phash, artifact_hash=None, timestamp=_now(), attempts=attempt)
@@ -552,6 +648,11 @@ def main(argv=None):
     a = ap.parse_args(argv)
     root = os.path.abspath(a.root)
     try:
+        if a.cmd in ('generate', 'generate-all'):
+            import figure_review
+            if not figure_review.enabled(root):
+                print('请先通过 figure_workflow 导入并确认配图计划')
+                return 1
         if a.cmd == "plan":
             specs = plan_figures(root, provider=a.provider)
             print(json.dumps(specs, ensure_ascii=False, indent=1) if a.json
