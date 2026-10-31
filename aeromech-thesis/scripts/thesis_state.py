@@ -46,7 +46,7 @@ STAGES = ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S10"]
 SEVERITY = ["严重", "高", "一般", "建议"]
 CATEGORIES = ["structure", "academic", "citation", "engineering", "data", "figure", "writing", "integrity"]
 ISSUE_STATUS = ["open", "in_progress", "closed"]
-HISTORY_TYPES = ["forward", "revert", "milestone", "migrate", "override"]
+HISTORY_TYPES = ["forward", "revert", "milestone", "migrate", "override", "return"]
 GATE_STATES = ["passed", "conditional", "failed"]
 PAPER_TYPES = ["research", "review", "design"]
 EVIDENCE_TYPE_BY_PAPER = {"research": "data_or_analysis", "review": "literature", "design": "design_basis"}
@@ -64,7 +64,14 @@ FORWARD = {
 REVERT = ({(f, t) for f in ("S5", "S6", "S7", "S8") for t in ("S3", "S4", "S5", "S6") if f != t}
           | {("S8", "S7")}
           | {(f, t) for f in ("S9",) for t in ("S3", "S4", "S5", "S6", "S7")})
-RETURN = {(t, f) for (f, t) in REVERT}   # 返程总规则
+# C1 消歧：S5↔S6 是 state.md §3 L56 的"双向"前进特例（forward），不得再同时拥有 revert 语义。
+# 同一条边只允许一种语义；F∩R 必须为空（回归锁见 tests/v1_6/test_c1_edge_semantics.py E1）。
+REVERT -= {("S5", "S6"), ("S6", "S5")}
+RETURN = {(t, f) for (f, t) in REVERT}   # 返程总规则（state.md §3 L66）
+
+# C1 不变量：同一条边不得同时拥有 forward 与 revert 语义（否则 requested kind 无法判定，
+# 且 revert 逆边会被静默当成普通前进）。违反即模块导入失败（fail-closed，绝不降级放行）。
+assert not (FORWARD & REVERT), f"C1 边语义冲突 F∩R={sorted(FORWARD & REVERT)}"
 
 REMEDIATION = {
     "ST-SCHEMA": "按 state.md §10 迁移协议升级（先备份），或升级 Skill",
@@ -295,13 +302,18 @@ def check_gate_evidence(state, root):
 # ---------------- transition ----------------
 
 def _edge_kinds(f, t):
+    """该边的语义集合。C1 后不变量：forward 与 revert 至多其一；return 可与 forward 并存。
+
+    return 与 forward 可并存是因为 state.md §3 L66 规定"A_revert 的逆边一律合法"，
+    其中部分逆边恰好也是规范明列的 forward 边（如 S4→S5）；这类边仍须走返程语义。
+    """
     kinds = set()
     if (f, t) in FORWARD:
         kinds.add("forward")
     if (f, t) in REVERT:
         kinds.add("revert")
     if (f, t) in RETURN:
-        kinds.add("return")     # 回退逆边（type 仍记 forward，state.md §3）
+        kinds.add("return")     # 返程语义（history 记 type=forward，state.md §3 L66）
     if f == t:
         kinds.add("milestone")
     return kinds
@@ -317,7 +329,60 @@ def _open_issues(state, only_severe=False):
     return out
 
 
-def preconditions(state, root, f, t, kind):
+def _find_issue(state, issue_id):
+    for iss in (state.get("stage") or {}).get("open_issues") or []:
+        if str(iss.get("id")) == str(issue_id):
+            return iss
+    return None
+
+
+def check_return_prereq(state, issue_id):
+    """返程前置（state.md §3 L66）：触发该回退的 open_issue 必须存在且已 closed。
+
+    fail-closed：无触发源 / 不存在 / 未 closed / 状态非法，一律返回问题列表（调用方拒绝）。
+    绝不静默放行，也不把非法 forward 解释成合法返程。
+    """
+    problems = []
+    if not issue_id:
+        problems.append("返程缺少触发源 issue_id（state.md §3 L66：返程须关联触发回退的 open_issue）")
+        return problems
+    iss = _find_issue(state, issue_id)
+    if iss is None:
+        problems.append(f"返程 issue_id={issue_id} 在 stage.open_issues 中不存在")
+        return problems
+    status = iss.get("status")
+    if status not in ISSUE_STATUS:
+        problems.append(f"返程 issue {issue_id} 状态非法：{status!r}（许可值 {ISSUE_STATUS}）")
+    elif status != "closed":
+        problems.append(f"返程 issue {issue_id} 尚未 closed（当前 {status}）："
+                        "state.md §3 L66 要求触发回退的 open_issue 全部 closed")
+    return problems
+
+
+def _target_stage_gate_problems(state, root, f, t):
+    """目标阶段门禁（返程不得豁免，state.md §3 L68 优先级裁决）。
+
+    等价于"以 forward 身份进入 t 时应校验的、与来源阶段无关的那些条件"：
+    目标阶段的类型门禁/前置产物。与 f 有关的特例条件不在此列。
+    """
+    problems = []
+    proj = state.get("project") or {}
+    res = state.get("research") or {}
+    if t == "S3" and not proj.get("title"):
+        problems.append("project.title 为空：题目未确定（§3 S2→S3 前置）")
+    if t == "S7":
+        status, gp = check_gate_evidence(state, root)
+        if status == "failed":
+            problems.extend(f"门禁证据不通过：{x['reason']}" for x in gp)
+    if t == "S8" and (state.get("writing") or {}).get("status") not in ("draft_done", "final"):
+        problems.append("S7→S8 要求章稿完成（writing.status ∈ draft_done/final）")
+    if t == "S9":
+        if (state.get("writing") or {}).get("status") not in ("draft_done", "final"):
+            problems.append("S8→S9 要求全稿齐备（writing.status）")
+    return problems
+
+
+def preconditions(state, root, f, t, kind, issue_id=None):
     """目标阶段前置条件（state.md §3/§5 + §17.1 可机械判定项），返回 problems[]。"""
     problems = []
     proj = state.get("project") or {}
@@ -343,10 +408,51 @@ def preconditions(state, root, f, t, kind):
         for iss in _open_issues(state, only_severe=True):
             problems.append(f"未关闭严重/高问题 {iss.get('id')}（severity={iss.get('severity')}）：S9→S10 拒绝")
     if kind == "return":
-        # 返程条件（触发回退的 open_issue 全部 closed 才能前进）：逐边 issue→阶段追溯
-        # 由 Phase 3 orchestrator 基于 history/issue_id 实施；此处保持词表级检查。
-        pass
+        # C1：返程前置真正实现（原为空 pass，是跳阶洞）。两套条件同时校验（§3 L66 + L68）。
+        problems.extend(check_return_prereq(state, issue_id))
+        problems.extend(_target_stage_gate_problems(state, root, f, t))
     return problems
+
+
+def _resolve_kind(requested, kinds, f, t):
+    """把 requested 解析为具体语义；非法组合返回 (None, 拒绝原因)。
+
+    C1 规则（禁止静默改写 requested kind）：
+      - forward  → 只认 FORWARD；但若该边同时/仅具 return 语义，必须**显式**走 return
+                    （history 记 kind=return + issue_id），不得静默当普通前进。
+      - return   → 只认 RETURN（显式返程请求）。
+      - revert   → 只认 REVERT；不允许用 revert 名义走一条纯 FORWARD 边（消 F∩R 歧义）。
+      - milestone→ 仅 f == t。
+      - override → 由调用方专门处理。
+    """
+    if requested == "milestone":
+        return ("milestone", None) if "milestone" in kinds else (None, "非阶段内里程碑")
+    if requested == "override":
+        return "override", None
+    if requested == "return":
+        if "return" in kinds:
+            return "return", None
+        return None, (f"{f}→{t} 不是任何 revert 的逆边：不可按返程执行"
+                      "（state.md §3 L66 返程总规则）")
+    if requested == "forward":
+        if "forward" in kinds:
+            # 方案 A：forward 优先——该边是规范明列的前进边（如 L54 S3→S5、L58 S4→S7），
+            # 按普通 forward 处理，不要求 issue_id、不叠加返程闸门。
+            return "forward", None
+        if "return" in kinds:
+            # RETURN-only 边（如 S7→S9、S3→S9）：不得当作普通 forward，
+            # 必须按 return 前置校验（issue_id 存在且 closed + 目标阶段类型门禁）。
+            return "return", None
+        return None, (f"{f}→{t} 不在允许边内（请求 type=forward）；合法路径见 state.md §3")
+    if requested == "revert":
+        if "revert" in kinds:
+            return "revert", None
+        if "forward" in kinds:
+            return None, (f"{f}→{t} 是规范明列的前进边（state.md §3 L56 双向特例），"
+                          "不得以 revert 名义执行：同一条边只允许一种语义")
+        return None, (f"{f}→{t} 不是合法回退边（state.md §3 回退项）；"
+                      "合法路径见 state.md §3")
+    return None, f"未知迁移类型 {requested!r}"
 
 
 def transition(root, to, htype=None, reason="", evidence=None, issue_id=None, override_note=""):
@@ -362,21 +468,24 @@ def transition(root, to, htype=None, reason="", evidence=None, issue_id=None, ov
     ok_edge = (
         requested == "milestone" and "milestone" in kinds or
         requested == "forward" and (kinds & {"forward", "return"}) or
-        requested == "revert" and ("revert" in kinds or (f, to) in FORWARD) or
+        requested == "revert" and "revert" in kinds or
+        requested == "return" and "return" in kinds or
         requested == "override")
     if not ok_edge:
         return False, {"reason": f"{f}→{to} 不在允许边内（请求 type={requested}）；合法路径见 state.md §3",
                        "repaired": repaired}
-    kind = "return" if (requested == "forward" and (f, to) in RETURN and (f, to) not in FORWARD) else requested
-    if requested == "revert":
+    kind, kind_err = _resolve_kind(requested, kinds, f, to)
+    if kind is None:
+        return False, {"reason": kind_err, "repaired": repaired}
+    if kind == "revert":
         if not (reason or issue_id):
             return False, {"reason": "回退必须有触发源（reason 或 issue_id，state.md §4 第 4 步）",
                            "repaired": repaired}
-    if requested == "milestone":
+    if kind == "milestone":
         probs = []          # 阶段内里程碑不重复校验进入该阶段的前置（state.md §6）
     else:
-        probs = preconditions(state, root, f, to, kind)
-    if requested == "override" and probs:
+        probs = preconditions(state, root, f, to, kind, issue_id=issue_id)
+    if kind == "override" and probs:
         # 强行推进：需 note（二次确认记录）+ 挂 open_issue（§9）
         if not override_note:
             return False, {"reason": "override 必须提供 --override-note（用户确认记录）且缺项转 open_issue",
@@ -384,24 +493,40 @@ def transition(root, to, htype=None, reason="", evidence=None, issue_id=None, ov
     elif probs:
         return False, {"reason": "前置条件不满足", "missing": probs, "repaired": repaired}
 
-    if requested == "revert":
+    if kind == "revert":
         _backup(root, "revert")            # §11 回退前备份
-    hist = {"from": f, "to": to, "type": "forward" if kind == "return" else requested,
-            "reason": reason or (override_note if requested == "override" else ""),
+    # C1：history 始终可追溯——记录 requested edge、该边是否存在于正常状态图、真实 kind。
+    edge_exists = bool(kinds) and (f, to) in (FORWARD | REVERT | RETURN)
+    hist = {"from": f, "to": to,
+            "type": "forward" if kind == "return" else kind,
+            "kind": kind,
+            "requested_from": f, "requested_to": to,
+            "requested_type": requested,
+            "edge_exists": edge_exists,
+            "reason": reason or (override_note if kind == "override" else ""),
             "evidence": list(evidence or []), "issue_id": issue_id,
-            "override": requested == "override", "ts": _now()}
-    if hist["reason"] and requested == "override":
-        hist["reason"] += f"（override：{override_note}）"
+            "override": kind == "override", "ts": _now()}
+    if kind == "override":
+        hist["override_note"] = override_note
+        if hist["reason"]:
+            hist["reason"] += f"（override：{override_note}）"
     state["stage"]["history"].append(hist)
-    if requested != "milestone":
+    if kind != "milestone":
         state["stage"]["current"] = to
-    if requested == "override":
-        detail = f"：{'；'.join(probs)}" if probs else "（无缺项记录，用户坚持推进/跳门禁校验）"
+    if kind == "override":
+        # C1：即使 probs 为空也必须留审计 issue（不得无痕绕过状态机）。
+        if probs:
+            detail = f"：{'；'.join(probs)}"
+        elif not edge_exists:
+            detail = f"（边 {f}→{to} 不存在于正常状态图；无缺项记录，用户坚持越权推进）"
+        else:
+            detail = "（边合法且无缺项记录，用户仍要求强制推进）"
         iss = _add_issue_dict(state, severity="高", category="structure",
                               target_stage=to, desc=f"强行推进 {f}→{to}{detail}")
         hist["issue_id"] = iss["id"]
     save_state(root, state)
-    return True, {"from": f, "to": to, "type": hist["type"], "history": hist, "repaired": repaired}
+    return True, {"from": f, "to": to, "type": hist["type"], "kind": kind,
+                  "edge_exists": edge_exists, "history": hist, "repaired": repaired}
 
 
 def _next_id(state, key, fmt):

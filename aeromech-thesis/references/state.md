@@ -63,7 +63,7 @@
 | S9 → S3/S4/S5/S6/S7 | **回退** | QA 问题按 §8 映射归类 |
 | S9 → S10 | 前进 | `stage.open_issues` 中 severity ∈ {严重, 高} 全部 closed |
 
-**返程总规则**：任何 `revert` 的逆边一律合法，无需逐条枚举。前置条件 = 触发该回退的 open_issue 全部 `closed` + 受影响产物已修订落盘。返程迁移 `type: forward`，reason 中写明关联 `issue_id`。
+**返程总规则**：任何 `revert` 的逆边一律合法，无需逐条枚举。前置条件 = 触发该回退的 open_issue 全部 `closed` + 受影响产物已修订落盘。返程迁移记 `type: forward` + `kind: return`，并写明关联 `issue_id`。
 
 **优先级裁决**：返程条件**不豁免**目标阶段的类型门禁。例如 review 型由 S7 回退 S4 后返程进入 S7，仍须满足 §5 第 4 步（`literature_status: reviewed` 且至少 1 条非【待核实】条目）；两套条件同时校验，任一不满足即拒绝。
 
@@ -124,6 +124,7 @@ stage:
     - from: S3
       to: S7
       type: forward          # forward | revert | milestone | migrate | override
+      kind: forward          # forward | return（返程时 type 记 forward、kind 记 return）
       reason: "研究方案与FMEA分析表齐备，门禁通过"
       evidence: [artifacts/research-plan.md, artifacts/analysis/fmea-table.md]
       issue_id: null         # revert 与“问题关闭后返程”迁移必填
@@ -135,6 +136,7 @@ stage:
 
 - `from == to` 的迁移合法，`type: milestone`，用于阶段内里程碑（如“研究方案定稿”“第3章完成”），`stage.current` 不变但仍刷新 `last_updated`。
 - 回退记录必须写清 `reason` 与 `issue_id`（无对应问题时写 `reason` 说明触发源）。
+- 返程（任何 `revert` 的逆边）记录 `type: forward`、`kind: return`，且 `issue_id` 对应的 open_issue 必须已 `closed`；缺少触发源时拒绝迁移。
 - `type: override` 与字段 `override: true` 必须同时出现、含义一致（用户强行推进）；`conditional` 门禁放行属正常迁移，`type: forward` 且 `override` 必须为 `false`。
 - `ts` 取系统时间，history 内应单调递增；若系统时间早于上一条（时钟回拨或夹具数据），保留真实时间并在 `reason` 末尾标注「时钟异常」。
 
