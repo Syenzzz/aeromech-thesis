@@ -4,7 +4,7 @@
 
 从选题分析、研究方案、工程分析、数据处理、章节写作，到图表生成、引用审计、质量门禁与答辩准备的全流程助手。
 
-`v1.6.5` · 可回退状态机 · 学术诚信守卫 · 真正可编辑的 DOCX/PDF 交付
+`v1.7.0` · 可回退状态机 · 学术诚信守卫 · 真正可编辑的 DOCX/PDF 交付
 
 ---
 
@@ -44,7 +44,7 @@
 | 工程分析 | FMEA / FTA / RCA 分析框架、故障链识别、维修策略与维修大纲优化 |
 | 数据处理 | 描述统计、数据清洗、单位统一、计算审计（CALC-XXX 可复现） |
 | 可靠性分析 | MTBF / MTTR / 可用度计算、Weibull 拟合（须真实数据） |
-| 图表生成 | Mermaid 真实渲染（技术路线 / 流程图 / 故障树）+ `figkit` 确定性数据图，统一学术视觉系统 |
+| 图表生成 | 统一配图工作流：配图计划 → 逐图确认 → 生成 → 审核 → 插入确认；支持 Mermaid/figkit 确定性图与可编辑 PPTX/PNG/SVG |
 | 视觉 QA | VIS-01~12 视觉检查进入构建链与交付门禁；渲染失败即失败，不生成假图 |
 | 引用完整性 | 观点 → 来源 → 支持度 → 编号 → 格式 全链审计 |
 | 研究完整性 | RQ / Evidence / Claim / Conclusion 注册表、可追溯图、模拟数据台账、证据越界检测 |
@@ -62,10 +62,13 @@
 │   ├── CHANGELOG.md          # 逐版本变更与验证记录
 │   ├── references/           # 规则库、子 Agent 说明、领域知识与模板
 │   ├── scripts/              # 可执行实现（构建、QA、图表、研究引擎、生图）
-│   └── tests/                # 回归测试套件（v1_4 / v1_4_1 / v1_5 / v1_6 / v1_6_5 / Test A / Test B）
+│   └── tests/                # 回归测试套件（v1_4 / v1_4_1 / v1_5 / v1_6 / v1_6_5 / v1_7 / Test A / Test B）
 ├── docs/v1.6.5/              # 设计与规格文档（视觉系统、图类型规范、生图架构等）
+├── docs/v1.7.0/              # 配图模块实施计划
 ├── .aeromech/artifacts/      # 开发期审计与各阶段报告（分析、QA、发布就绪）
 ├── sync.py                   # 开发目录 ⇄ 安装目录同步器（镜像同步 + 安全护栏）
+├── build_skill_package.py    # WorkBuddy 平台技能包打包脚本（输出 dist/）
+├── assets/                   # 平台头像/图标生成素材
 ├── DEV_SYNC.md               # 开发目录规程（权威源）
 └── INSTALL_SYNC.md           # 安装目录规程（运行副本）
 ```
@@ -230,12 +233,14 @@ python sync.py --check                  # 期望 IDENTICAL，rc=0
 | [`aeromech-thesis/CHANGELOG.md`](aeromech-thesis/CHANGELOG.md) | 逐版本变更、发布验证证据、已知限制 |
 | [`references/`](aeromech-thesis/references) | 完整性、编排、研究智能、状态机、模板保真等领域规则 |
 | [`docs/v1.6.5/`](docs/v1.6.5) | 视觉设计系统、图类型规范、图像 Provider 架构与测试计划 |
+| [`docs/v1.7.0/`](docs/v1.7.0) | 统一配图模块实施计划 |
 | [`DEV_SYNC.md`](DEV_SYNC.md) / [`INSTALL_SYNC.md`](INSTALL_SYNC.md) | 开发目录与安装目录的同步规程 |
 
 ## 版本
 
-当前版本 **v1.6.5**（Academic Figure Quality & User-Configured Image Provider）。
+当前版本 **v1.7.0**（统一论文配图工作流）。
 
+- **v1.7.0** — 统一配图工作流：配图计划与逐图确认、导入/登记已有图片、可编辑 PPTX 图形与柱线图/表格、PNG/SVG 导出、项目级外部生图额度与插入确认；旧项目图片可登记后重新确认。
 - **v1.6.5** — 学术视觉系统单一来源、Visual QA（VIS-01~12）入交付门禁、用户自配 Image Provider（可选、零阻塞）、受控 AI 生图（Figure Plan 九字段闸 + 成本闸）、AI 视觉 ≠ 研究证据、三 scope 密钥泄漏扫描。
 - **v1.6.0** — 全栈编排：StateIO / 检查点 / 断点恢复、统一材料进入、学校要求 provenance、阶段调度矩阵、Thesis Build、Delivery Gate 全聚合。
 - **v1.5.0** — 研究智能层：方法选择审计与可行性门禁、统一诊断、白名单自动修复、Agent Loop（≤5 轮）、8 维质量评分。
