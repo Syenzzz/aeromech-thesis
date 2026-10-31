@@ -36,6 +36,8 @@ TESTS = [
     "test_pipeline_contract.py",
     "test_document_contract.py",
     "test_omml_word_compat.py",
+    # C1 状态机边语义与跳阶防护（F∩R 消歧 / RETURN 前置 / override 审计）
+    "test_c1_edge_semantics.py",
 ]
 
 
