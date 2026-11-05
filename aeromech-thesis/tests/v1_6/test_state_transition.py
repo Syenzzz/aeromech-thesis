@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.join(HERE, "..", "..", "scripts"))
 sys.path.insert(0, HERE)
 import _fixtures as F
 import thesis_state as TS
+import thesis_review as TR
 
 PASS, FAIL = 0, 0
 
@@ -34,8 +35,14 @@ def prep_for_s3(root):
     st, _ = TS.load_state(root)
     st["project"]["title"] = "题目X"
     st["research"]["topic_card_file"] = "artifacts/topic-card.md"
+    st["research"]["plan_file"] = "artifacts/research-plan.md"
+    st["research"]["outline_file"] = "artifacts/outline.md"
     TS.save_state(root, st)
     F.write_text(root, ".aeromech/artifacts/topic-card.md", "# card\n")
+    F.write_text(root, ".aeromech/artifacts/research-plan.md", "# plan\n")
+    F.write_text(root, ".aeromech/artifacts/outline.md", "# outline\n")
+    TR.confirm(root, 'plan', ['.aeromech/artifacts/research-plan.md'])
+    TR.confirm(root, 'outline', ['.aeromech/artifacts/outline.md'])
 
 
 def main():
@@ -113,6 +120,7 @@ def main():
         "evidence_files": ["artifacts/analysis/fmea-table.md"],
         "gate_passed": "passed"}
     F.write_text(root3, ".aeromech/artifacts/research-plan.md", "# plan\n")
+    TR.confirm(root3, 'plan', ['.aeromech/artifacts/research-plan.md'])
     TS.save_state(root3, stg)
     ok, r = TS.transition(root3, "S7", "forward", "证据齐备")
     check("boundary S7 门禁证据齐备→放行", ok, str(r.get("missing", "")))

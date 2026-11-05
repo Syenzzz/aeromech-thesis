@@ -477,8 +477,11 @@ def generate_figure(root, figure_id, provider="local"):
     if specs is None:
         specs = prov.plan(root)
         save_plan(root, specs, provider=provider)
+    if not any(str(sp.get('figure_id')) == figure_id for sp in specs):
+        return {"figure_id": figure_id, "status": "REJECTED", "artifact": None,
+                "reason": f"计划中无 {figure_id}", "sha256": None, "quality": []}
     import figure_review
-    if figure_review.enabled(root) and not figure_review.figure_plan_confirmed(root, figure_id, specs):
+    if not figure_review.figure_plan_confirmed(root, figure_id, specs):
         return {"figure_id": figure_id, "status": "NEEDS_HUMAN_REVIEW",
                 "artifact": None, "reason": "PLAN_CONFIRMATION_REQUIRED",
                 "sha256": None, "quality": []}
@@ -577,7 +580,7 @@ def _generate_external(root, sp, dec):
                              model=dec.get("external_model"),
                              base_url=dec.get("external_base_url"))
     import figure_review
-    if figure_review.enabled(root) and not figure_review.reserve_external_call(root):
+    if not figure_review.reserve_external_call(root):
         return _result(fid, "NEEDS_HUMAN_REVIEW", None, None, None,
                        reason="EXTERNAL_AUTHORIZATION_OR_BUDGET_REQUIRED")
     prov, _rejected = G.build_provenance(

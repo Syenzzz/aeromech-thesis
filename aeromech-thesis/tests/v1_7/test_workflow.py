@@ -14,6 +14,13 @@ import image_backends
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_empty_plan_can_be_explicitly_confirmed(self):
+        with tempfile.TemporaryDirectory() as root:
+            FI.save_plan(root, [])
+            self.assertEqual(workflow.main([root, 'sync-plan']), 0)
+            self.assertEqual(workflow.main([root, 'confirm-plan']), 0)
+            self.assertTrue(review.plan_confirmed(root, []))
+
     def test_fault_tree_rejects_missing_semantics(self):
         with tempfile.TemporaryDirectory() as root:
             import json
@@ -61,6 +68,14 @@ class WorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             fi = FI.main([root, 'generate', '--figure', 'FIG-1'])
             self.assertEqual(fi, 1)
+
+    def test_library_rejects_generation_without_review_state(self):
+        with tempfile.TemporaryDirectory() as root:
+            spec = {'figure_id': 'FIG-1', 'kind': 'editable', 'source': 'missing.json', 'out': 'out.png'}
+            FI.save_plan(root, [spec])
+            result = FI.generate_figure(root, 'FIG-1')
+            self.assertEqual(result['reason'], 'PLAN_CONFIRMATION_REQUIRED')
+            self.assertFalse(os.path.exists(os.path.join(root, 'out.png')))
 
     def test_external_budget_blocks_backend(self):
         with tempfile.TemporaryDirectory() as root:

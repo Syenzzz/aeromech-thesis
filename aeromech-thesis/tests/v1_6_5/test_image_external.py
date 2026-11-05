@@ -108,6 +108,11 @@ def make_proj(tmp, name, plan_specs):
     RI.init_registries(root)
     RI.save_registry(root, "rq", [{"id": "RQ-01", "question": "q", "objective": "o"}])
     FI.save_plan(root, plan_specs)
+    import figure_review
+    if plan_specs and all(not spec.get('source') for spec in plan_specs):
+        figure_review.save_plan(root, plan_specs)
+        figure_review.confirm_plan(root)
+        figure_review.set_external_policy(root, True, 10)
     return root
 
 
@@ -275,6 +280,9 @@ def main():
             "f.arrow('e1', 8, 4.6-0.07, 8, 3.9+0.07)\n"
             "f.arrow('e2', 8, 3.0-0.07, 8, 2.3+0.07)\n"
             "f.save(d, 'fig10', min_font=12)\n" % SCRIPTS)
+        import figure_review
+        figure_review.save_plan(root2, FI.load_plan(root2))
+        figure_review.confirm_plan(root2)
         res2 = FI.generate_figure(root2, "FIG-010", provider="local")
         check("IMG-05b 无 Key + 本地源：既有管线正常 GENERATED",
               res2["status"] == "GENERATED", str(res2)[:80])

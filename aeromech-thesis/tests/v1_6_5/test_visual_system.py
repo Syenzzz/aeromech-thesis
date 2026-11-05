@@ -189,6 +189,10 @@ def main():
     open(mmd, "w", encoding="utf-8").write("graph TD\n A-->B\n")
     fake_out = os.path.join(root, ".aeromech", "artifacts", "figures", "final", "fig1-1.png")
     os.makedirs(os.path.dirname(fake_out), exist_ok=True)
+    import figure_review
+    specs = FI.plan_figures(root, provider="local")
+    figure_review.save_plan(root, specs)
+    figure_review.confirm_plan(root)
 
     orig = RM.render_with_mmdc
     def _fail_render(*a, **k):

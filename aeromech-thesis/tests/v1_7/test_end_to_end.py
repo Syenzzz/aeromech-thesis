@@ -13,6 +13,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'
 import figure_iface as fi
 import figure_review as review
 import thesis_build as build
+import thesis_review
+import thesis_state
 
 
 class EndToEndTests(unittest.TestCase):
@@ -20,8 +22,18 @@ class EndToEndTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             folder = os.path.join(root, '.aeromech')
             os.makedirs(folder)
+            thesis_state.main([root, 'init'])
+            state, _ = thesis_state.load_state(root)
+            state['research']['plan_file'] = 'plan.md'
+            state['research']['outline_file'] = 'outline.md'
+            thesis_state.save_state(root, state)
+            for name, category in [('plan.md', 'plan'), ('outline.md', 'outline')]:
+                with open(os.path.join(folder, name), 'w', encoding='utf-8') as f:
+                    f.write(category)
+                thesis_review.confirm(root, category, ['.aeromech/' + name])
             with open(os.path.join(folder, 'chapter.md'), 'w', encoding='utf-8') as f:
                 f.write('# 第1章 维修方法\n\n维修过程见图1-1。\n\n（图1-1 维修流程）\n\n统计结果见图1-2。\n\n（图1-2 故障统计）\n\n分析见图1-3。\n\n（图1-3 风险矩阵）\n')
+            thesis_review.confirm(root, 'chapters', ['.aeromech/chapter.md'])
             with open(os.path.join(root, 'source.json'), 'w', encoding='utf-8') as f:
                 json.dump({'nodes': [{'id': 'a', 'text': '故障检查', 'x': 1, 'y': 1, 'w': 3, 'h': 1},
                                       {'id': 'b', 'text': '维修处理', 'x': 1, 'y': 3, 'w': 3, 'h': 1},

@@ -64,6 +64,8 @@ def contract(root, mode="recon", chapters=("artifacts/chapters/ch1.md",
     w(root, "artifacts/chapters/ch2.md", "# 第2章 方法\n\n## 2.1 小节\n\n方法内容。\n")
     w(root, "artifacts/literature.md", "- 参考文献一\n- 参考文献二\n")
     w(root, "artifacts/analysis/apx.md", "附录数据说明。\n")
+    if all(os.path.isfile(os.path.join(root, '.aeromech', p)) for p in chapters):
+        F.confirm_content(root, list(chapters))
     if mode == "tpl":
         sys.path.insert(0, os.path.join(HERE, ".."))
         import test_a_template_fidelity as TA
@@ -201,6 +203,7 @@ def main():
     w(troot, "artifacts/chapters/tbl.md",
       "# 第1章 表测试\n\n表1-1 割集表\n\n| 割集 | 阶 |\n|---|---|\n| MC-1 | 1 |\n| MC-4 | 2 |\n\n"
       "正文一句。\n")
+    F.confirm_content(troot, ['artifacts/chapters/tbl.md'])
     tb_out, _ = TB.build_docx(troot)
     from docx import Document as _Doc
     td = _Doc(tb_out)
@@ -234,6 +237,8 @@ def main():
     w(troot, "artifacts/chapters/fig.md",
       "# 第1章 图测试\n\n（图1-1 示意）\n\n正文一句。\n")
     w(troot, "build-contract.yaml", yaml.safe_dump(c3e, allow_unicode=True))
+    F.confirm_content(troot, c3e['content']['chapters'])
+    F.confirm_figure(troot, 'FIG-001', c3e['figures'][0]['file'])
     tf_out, _ = TB.build_docx(troot)
     tdf = _Doc(tf_out)
     celltext = "\n".join(c.text for t in tdf.tables for r in t.rows for c in r.cells)
@@ -270,6 +275,8 @@ def main():
     fdir2 = os.path.join(eroot, ".aeromech", "artifacts", "figures", "final")
     os.makedirs(fdir2, exist_ok=True)
     _Img2.new("RGB", (800, 400), "white").save(os.path.join(fdir2, "fig1-1.png"))
+    F.confirm_content(eroot, ce['content']['chapters'])
+    F.confirm_figure(eroot, 'FIG-001', ce['figures'][0]['file'])
     e_out, _ = TB.build_docx(eroot)
     ed = _Doc(e_out)
     etext = "\n".join(p.text for p in ed.paragraphs)

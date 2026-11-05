@@ -112,7 +112,10 @@ def main():
               and d["existing_pipeline_available"] is True)
         # 端到端：generate_figure 走回落，产出真实图（非占位）
         root = make_proj(tmp, "fb1")
-        FI.plan_figures(root, provider="local")
+        plan = FI.plan_figures(root, provider="local")
+        import figure_review
+        figure_review.save_plan(root, plan)
+        figure_review.confirm_plan(root)
         res = FI.generate_figure(root, "FIG-001", provider="local")
         check("FB-01b generate_figure 端到端回落生成 GENERATED",
               res["status"] == "GENERATED", res.get("reason", ""))
@@ -158,6 +161,8 @@ def main():
         plan[0]["provider_required"] = "external"
         plan[0]["type"] = "conceptual_illustration"
         FI.save_plan(root, plan)
+        figure_review.save_plan(root, plan)
+        figure_review.confirm_plan(root)
         res = FI.generate_figure(root, "FIG-001", provider="local")
         check("FB-05 mandatory 无凭据→NEEDS_CONFIGURATION（NHR，不 fake 不 BLOCK）",
               res["status"] == "NEEDS_HUMAN_REVIEW"
@@ -183,11 +188,15 @@ def main():
     # Scenario A：无 Key 全流程与"不启用 image 模块"逐字节一致
     with Clean():
         r1 = make_proj(tmp, "sa_plain")
-        FI.plan_figures(r1, provider="local")
+        plan = FI.plan_figures(r1, provider="local")
+        figure_review.save_plan(r1, plan)
+        figure_review.confirm_plan(r1)
         FI.generate_figure(r1, "FIG-001", provider="local")
         sha_plain = FI.current_status(r1, "FIG-001")[1]["sha256"]
         r2 = make_proj(tmp, "sa_image")
-        FI.plan_figures(r2, provider="local")
+        plan = FI.plan_figures(r2, provider="local")
+        figure_review.save_plan(r2, plan)
+        figure_review.confirm_plan(r2)
         FI.generate_figure(r2, "FIG-001", provider="local")   # 同代码路径
         sha_after = FI.current_status(r2, "FIG-001")[1]["sha256"]
         check("Scenario A 无 Key：产物 sha256 与既有管线逐字节一致",
@@ -198,7 +207,9 @@ def main():
         IC.resolve = lambda *a, **k: called.append(1)
         try:
             r3 = make_proj(tmp, "sa_legacy")
-            FI.plan_figures(r3, provider="local")
+            plan = FI.plan_figures(r3, provider="local")
+            figure_review.save_plan(r3, plan)
+            figure_review.confirm_plan(r3)
             FI.generate_figure(r3, "FIG-001", provider="local")
         finally:
             IC.resolve = orig_resolve

@@ -17,6 +17,7 @@ sys.path.insert(0, HERE)
 import _fixtures as F
 import figure_iface as FI
 import research_integrity as RI
+import figure_review as FR
 
 PASS, FAIL = 0, 0
 
@@ -110,6 +111,8 @@ def main():
     # ---------- FIGIF-02 plan ----------
     root = make_root(tmp, "plan")
     specs = FI.plan_figures(root, provider="mock")
+    FR.save_plan(root, specs)
+    FR.confirm_plan(root)
     check("FIGIF-02 plan 产出机读清单", specs and specs[0]["figure_id"] == "FIG-001")
     check("FIGIF-02 计划落盘 figure-plan.yaml（机读格式）",
           os.path.isfile(FI.plan_path(root)))
@@ -147,6 +150,8 @@ def main():
                  "out": ".aeromech/artifacts/figures/final/FIG-BAD.png",
                  "related_rqs": ["RQ-01"], "related_analyses": [], "related_claims": []}]
     FI.plan_figures(root, provider="mock", specs=spec_bad)
+    FR.save_plan(root, spec_bad)
+    FR.confirm_plan(root)
     rbad = FI.generate_figure(root, "FIG-BAD", provider="mock")
     check("FIGIF-05 生成失败→REJECTED", rbad["status"] == "REJECTED")
     check("FIGIF-05 失败不落任何产物文件（禁止 placeholder）",
@@ -166,7 +171,9 @@ def main():
     root3 = make_root(tmp, "mmdmissing")
     RI.save_registry(root3, "figures", [
         {"id": "FIG-009", "name": "图9 缺源", "related_rqs": ["RQ-01"]}])
-    FI.plan_figures(root3, provider="local")
+    plan3 = FI.plan_figures(root3, provider="local")
+    FR.save_plan(root3, plan3)
+    FR.confirm_plan(root3)
     sp9 = [s for s in FI.load_plan(root3) if s["figure_id"] == "FIG-009"][0]
     check("boundary local plan：无 mmd/script 源→kind=None", sp9["kind"] is None)
     r9 = FI.generate_figure(root3, "FIG-009", provider="local")

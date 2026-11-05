@@ -382,9 +382,48 @@ def _target_stage_gate_problems(state, root, f, t):
     return problems
 
 
+def review_gate_problems(state, root, f, t):
+    """User review is required before moving past the reviewed stage."""
+    import glob
+    import thesis_review
+    problems = []
+    if f in STAGES and t in STAGES and STAGES.index(t) > STAGES.index(f) and STAGES.index(t) > STAGES.index('S3'):
+        research = state.get('research') or {}
+        for category, key, label in (('plan', 'plan_file', '研究方案'),
+                                     ('outline', 'outline_file', '论文目录')):
+            rel = research.get(key)
+            paths = [os.path.join('.aeromech', rel).replace('\\', '/')] if rel and not os.path.isabs(rel) else []
+            if not thesis_review.confirmed(root, category, paths):
+                problems.append(f'{label}尚未由用户确认或内容已改变')
+    if f in STAGES and t in STAGES and STAGES.index(t) > STAGES.index(f) and STAGES.index(t) >= STAGES.index('S8'):
+        folder = os.path.join(root, '.aeromech', 'artifacts', 'chapters')
+        paths = [os.path.relpath(p, root).replace('\\', '/') for p in sorted(glob.glob(os.path.join(folder, '*.md')))]
+        if not thesis_review.confirmed(root, 'chapters', paths):
+            problems.append('章节尚未由用户确认或内容已改变')
+    if f in STAGES and t in STAGES and STAGES.index(t) > STAGES.index(f) and STAGES.index(t) >= STAGES.index('S9'):
+        import figure_iface
+        import figure_review
+        try:
+            figures = figure_iface.load_plan(root)
+        except (OSError, yaml.YAMLError, AttributeError, TypeError):
+            figures = None
+        if figures is not None and (not isinstance(figures, list) or any(not isinstance(x, dict) for x in figures)):
+            figures = None
+        if figures is None or not figure_review.plan_confirmed(root, figures):
+            problems.append('配图清单尚未确认')
+        for figure in figures or []:
+            fid = str(figure.get('figure_id'))
+            status, record = figure_iface.current_status(root, fid)
+            artifact = (record or {}).get('artifact')
+            path = os.path.join(root, artifact) if artifact else ''
+            if not artifact or not figure_review.image_ready(root, fid, path, figures):
+                problems.append(f'配图 {fid} 尚未由用户确认或内容已改变')
+    return problems
+
+
 def preconditions(state, root, f, t, kind, issue_id=None):
     """目标阶段前置条件（state.md §3/§5 + §17.1 可机械判定项），返回 problems[]。"""
-    problems = []
+    problems = review_gate_problems(state, root, f, t)
     proj = state.get("project") or {}
     res = state.get("research") or {}
     if t == "S3" and not proj.get("title"):
@@ -481,6 +520,11 @@ def transition(root, to, htype=None, reason="", evidence=None, issue_id=None, ov
         if not (reason or issue_id):
             return False, {"reason": "回退必须有触发源（reason 或 issue_id，state.md §4 第 4 步）",
                            "repaired": repaired}
+    if kind == 'override':
+        review_problems = review_gate_problems(state, root, f, to)
+        if review_problems:
+            return False, {'reason': '用户审核尚未完成', 'missing': review_problems,
+                           'repaired': repaired}
     if kind == "milestone":
         probs = []          # 阶段内里程碑不重复校验进入该阶段的前置（state.md §6）
     else:

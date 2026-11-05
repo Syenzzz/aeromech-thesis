@@ -30,8 +30,8 @@ def main(argv=None):
     try:
         if args.command == 'sync-plan':
             figures = FI.load_plan(root)
-            if not figures:
-                raise ValueError('配图计划不存在或为空')
+            if figures is None:
+                raise ValueError('配图计划不存在')
             review.save_plan(root, figures)
             print(json.dumps(figures, ensure_ascii=False, indent=2))
         elif args.command == 'confirm-plan':
