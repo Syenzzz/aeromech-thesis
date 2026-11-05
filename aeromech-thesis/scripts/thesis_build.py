@@ -150,6 +150,17 @@ def validate_contract(root, contract=None):
             errors.append(f"章节文件缺失：{f}")
         elif os.path.getsize(p) == 0:
             errors.append(f"章节文件为空：{f}")
+    import thesis_review
+    chapter_paths = [os.path.relpath(os.path.join(root, '.aeromech', f), root).replace('\\', '/')
+                     for f in ch if not os.path.isabs(f)]
+    if len(chapter_paths) != len(ch) or not thesis_review.confirmed(root, 'chapters', chapter_paths):
+        errors.append('论文章节尚未由用户确认或内容已更改')
+    import thesis_state
+    try:
+        state, _ = thesis_state.load_state(root)
+        errors.extend(thesis_state.review_gate_problems(state, root, 'S3', 'S7'))
+    except (thesis_state.StateError, OSError):
+        errors.append('项目状态不可用，无法验证研究方案和目录的用户确认')
     if content.get("abstract_zh") or content.get("abstract_zh_file"):
         if content.get("abstract_zh_file") and not os.path.isfile(
                 os.path.join(root, ".aeromech", content["abstract_zh_file"])):
@@ -193,7 +204,7 @@ def validate_contract(root, contract=None):
         p = os.path.join(root, fg.get("file", ""))
         if not fg.get("file") or not os.path.isfile(p):
             errors.append(f"figure 文件缺失：{fg.get('figure_id')} {fg.get('file')}")
-        elif review_enabled and not FR.insertion_ready(root, str(fg.get('figure_id')), p, figure_plan or []):
+        elif not review_enabled or not FR.insertion_ready(root, str(fg.get('figure_id')), p, figure_plan or []):
             errors.append(f"figure 尚未确认或内容已更改：{fg.get('figure_id')}")
     if not figs:
         fig_na = True

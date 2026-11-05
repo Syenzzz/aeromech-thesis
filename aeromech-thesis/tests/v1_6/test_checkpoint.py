@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.join(HERE, "..", "..", "scripts"))
 sys.path.insert(0, HERE)
 import _fixtures as F
 import thesis_state as TS
+import thesis_review as TR
 
 PASS, FAIL = 0, 0
 
@@ -89,10 +90,14 @@ def main():
     st, _ = TS.load_state(root2)
     st["project"].update(title="中断题", paper_type="research")
     st["research"].update(topic_card_file="artifacts/topic-card.md",
-                          plan_file="artifacts/research-plan.md")
+                          plan_file="artifacts/research-plan.md",
+                          outline_file="artifacts/outline.md")
     TS.save_state(root2, st)
     for f_ in ("topic-card", "research-plan"):
         F.write_text(root2, f".aeromech/artifacts/{f_}.md", "# x\n")
+    F.write_text(root2, '.aeromech/artifacts/outline.md', '# outline\n')
+    TR.confirm(root2, 'plan', ['.aeromech/artifacts/research-plan.md'])
+    TR.confirm(root2, 'outline', ['.aeromech/artifacts/outline.md'])
     TS.transition(root2, "S3", "forward", "ok")
     TS.transition(root2, "S4", "forward", "ok")
     TS.transition(root2, "S5", "forward", "ok")

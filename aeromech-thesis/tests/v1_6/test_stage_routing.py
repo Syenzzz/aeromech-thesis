@@ -113,6 +113,11 @@ def main():
     r3 = SR.route(root)
     check("boundary CONDITIONALLY_FEASIBLE→WARN 可前进（Orchestrator 负责挂 issue）",
           not r3["blocked"] and r3["gates"]["feasibility"]["status"] == "WARN")
+    check("审核未确认时等待用户", r3['next']['action'] == 'human_review')
+    import thesis_review
+    thesis_review.confirm(root, 'plan', ['.aeromech/artifacts/research-plan.md'])
+    thesis_review.confirm(root, 'outline', ['.aeromech/artifacts/thesis-outline.md'])
+    r3 = SR.route(root)
     check("positive 证据齐后 S3→S4 advance",
           r3["next"]["action"] == "advance" and r3["next"]["to"] == "S4", str(r3["next"]))
     os.remove(os.path.join(analysis, "research-diagnosis.json"))

@@ -328,6 +328,12 @@ def step(root):
     cur = r["current"]
     nx = r["next"]
 
+    if nx.get('action') == 'human_review':
+        log_action(root, cur, '等待用户审核', None, {'missing': nx.get('missing', [])},
+                   'NEEDS_HUMAN_REVIEW')
+        return 1, {'action': 'NEEDS_HUMAN_REVIEW', 'stage': cur,
+                   'detail': nx.get('missing', [])}
+
     if r["blocked"]:
         # 完整诊断条目（含 disposition/auto 字段）是真源：loop open_findings 缺这些字段
         full = {x.get("diagnosis_id"): x for x in _read_diagnosis_findings(root)}

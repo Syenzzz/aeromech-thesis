@@ -59,8 +59,8 @@ def save_plan(root, figures):
 
 def confirm_plan(root):
     state = _load(root)
-    if not state.get('plan'):
-        raise ValueError('Cannot confirm an empty plan')
+    if 'plan' not in state or not isinstance(state['plan'], list):
+        raise ValueError('Figure plan is missing or invalid')
     ids = [str(item.get('figure_id') or '') for item in state['plan']]
     if any(not value for value in ids) or len(set(ids)) != len(ids):
         raise ValueError('Figure IDs must be present and unique')
@@ -74,14 +74,24 @@ def confirm_plan(root):
 
 
 def plan_confirmed(root, figures=None):
-    state = _load(root)
+    try:
+        state = _load(root)
+    except (OSError, ValueError):
+        return False
+    if not isinstance(state, dict):
+        return False
     plan = state.get('plan')
-    return (bool(plan) and state.get('confirmed_plan') == _digest(plan)
+    return (isinstance(plan, list) and state.get('confirmed_plan') == _digest(plan)
             and (figures is None or _digest(figures) == _digest(plan)))
 
 
 def figure_plan_confirmed(root, figure_id, figures):
-    state = _load(root)
+    try:
+        state = _load(root)
+    except (OSError, ValueError):
+        return False
+    if not isinstance(state, dict):
+        return False
     if _digest(state.get('plan')) != _digest(figures):
         return False
     matches = [item for item in figures if str(item.get('figure_id')) == str(figure_id)]
@@ -138,7 +148,12 @@ def image_confirmed(root, figure_id, path):
 
 
 def image_ready(root, figure_id, path, figures):
-    state = _load(root)
+    try:
+        state = _load(root)
+    except (OSError, ValueError):
+        return False
+    if not isinstance(state, dict):
+        return False
     image = state.get('images', {}).get(figure_id) or {}
     return (figure_plan_confirmed(root, figure_id, figures)
             and image_confirmed(root, figure_id, path)

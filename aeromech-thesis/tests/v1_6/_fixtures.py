@@ -67,3 +67,30 @@ def write_text(root, rel, content="x\n"):
     with open(p, "w", encoding="utf-8") as f:
         f.write(content)
     return p
+
+
+def confirm_content(root, chapters):
+    """Synthetic user approvals for tests unrelated to the review gate."""
+    import thesis_review as TR
+    st, _ = TS.load_state(root)
+    for key, category in (('plan_file', 'plan'), ('outline_file', 'outline')):
+        rel = st['research'].get(key) or f'artifacts/test-{category}.md'
+        path = os.path.join(root, '.aeromech', rel)
+        if not os.path.isfile(path):
+            write_text(root, '.aeromech/' + rel, '# test\n')
+        st['research'][key] = rel
+        TR.confirm(root, category, ['.aeromech/' + rel])
+    TS.save_state(root, st)
+    TR.confirm(root, 'chapters', ['.aeromech/' + p for p in chapters])
+
+
+def confirm_figure(root, fid, rel):
+    import figure_iface as FI
+    import figure_review as FR
+    spec = {'figure_id': fid, 'kind': 'user_asset', 'out': rel}
+    FI.save_plan(root, [spec])
+    FR.save_plan(root, [spec])
+    FR.confirm_plan(root)
+    path = os.path.join(root, rel)
+    FR.confirm_image(root, fid, path)
+    FR.confirm_insertion(root, fid, path, [spec])

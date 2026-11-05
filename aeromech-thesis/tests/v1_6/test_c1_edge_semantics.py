@@ -33,6 +33,9 @@ sys.path.insert(0, os.path.join(HERE, "..", "..", "scripts"))
 sys.path.insert(0, HERE)
 import _fixtures as F          # noqa: E402
 import thesis_state as TS      # noqa: E402
+import thesis_review as TR
+import figure_iface as FI
+import figure_review as FR
 
 PASS, FAIL = 0, 0
 
@@ -52,6 +55,23 @@ def check(name, cond, extra=""):
 def _mk(tmp, name):
     """最小项目 + 落到 S5（工程分析）的合法路径产物。"""
     root = F.make_project(os.path.join(tmp, name))
+    state, _ = TS.load_state(root)
+    state['research']['plan_file'] = 'artifacts/research-plan.md'
+    state['research']['outline_file'] = 'artifacts/outline.md'
+    TS.save_state(root, state)
+    F.write_text(root, '.aeromech/artifacts/research-plan.md', '# plan\n')
+    F.write_text(root, '.aeromech/artifacts/outline.md', '# outline\n')
+    F.write_text(root, '.aeromech/artifacts/chapters/ch1.md', '# chapter\n')
+    TR.confirm(root, 'plan', ['.aeromech/artifacts/research-plan.md'])
+    TR.confirm(root, 'outline', ['.aeromech/artifacts/outline.md'])
+    TR.confirm(root, 'chapters', ['.aeromech/artifacts/chapters/ch1.md'])
+    F.write_text(root, 'figure.png', 'fixture\n')
+    spec = {'figure_id': 'FIG-TEST', 'kind': 'user_asset', 'out': 'figure.png'}
+    FI.save_plan(root, [spec])
+    FR.save_plan(root, [spec])
+    FR.confirm_plan(root)
+    FI.record(root, 'FIG-TEST', 'GENERATED', artifact='figure.png')
+    FR.confirm_image(root, 'FIG-TEST', os.path.join(root, 'figure.png'))
     return root
 
 

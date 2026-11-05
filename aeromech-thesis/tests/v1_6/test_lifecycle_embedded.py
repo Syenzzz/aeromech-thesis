@@ -106,6 +106,9 @@ def build_env(tmp, name, placeholder="（图1-1 示意）", fig_present=True,
         FI.record(root, "FIG-001", fig_status,
                   artifact=".aeromech/artifacts/figures/final/fig1-1.png",
                   reason="test setup")
+    F.confirm_content(root, c['content']['chapters'])
+    if fig_present and fig_status == 'VALIDATED':
+        F.confirm_figure(root, 'FIG-001', c['figures'][0]['file'])
     return root
 
 
@@ -164,17 +167,25 @@ def main():
     r4 = build_env(tmp, "planned_only", fig_status=None)   # 只到 PLANNED
     check("B5a-06 前置：仅 PLANNED",
           FI.current_status(r4, "FIG-001")[0] == "PLANNED")
-    TB.build_docx(r4)
+    blocked4 = False
+    try:
+        TB.build_docx(r4)
+    except TB.BuildError:
+        blocked4 = True
     st4 = FI.current_status(r4, "FIG-001")[0]
     check("B5a-07 仅 PLANNED 的图不得被构建提升为 EMBEDDED（不凭空创建）",
-          st4 == "PLANNED", str(st4))
+          blocked4 and st4 == "PLANNED", str(st4))
 
     # ---------- B5a-08：REJECTED 图不得被构建洗白 ----------
     r5 = build_env(tmp, "rejected", fig_status="REJECTED")
-    TB.build_docx(r5)
+    blocked5 = False
+    try:
+        TB.build_docx(r5)
+    except TB.BuildError:
+        blocked5 = True
     st5 = FI.current_status(r5, "FIG-001")[0]
     check("B5a-08 REJECTED 图不得被构建改写为 EMBEDDED",
-          st5 == "REJECTED", str(st5))
+          blocked5 and st5 == "REJECTED", str(st5))
 
     # ---------- B5a-09：重复构建幂等（不破坏状态） ----------
     r6 = build_env(tmp, "twice")

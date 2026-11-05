@@ -427,8 +427,12 @@ def route(root):
             for e in cands:
                 if e["to"] in STAGES and STAGES.index(e["to"]) > STAGES.index(cur) and \
                         all(_prereq_ok(p) for p in e["prereq"]):
-                    next_act = {"action": "advance", "to": e["to"],
-                                "reason": "当前阶段出口产物齐备、AI 证据在位且无阻塞门禁"}
+                    pending_review = TS.review_gate_problems(state, root, cur, e['to'])
+                    next_act = ({'action': 'human_review', 'to': None,
+                                 'reason': '等待用户审核', 'missing': pending_review}
+                                if pending_review else
+                                {"action": "advance", "to": e["to"],
+                                 "reason": "当前阶段出口产物齐备、AI 证据在位且无阻塞门禁"})
                     break
             else:
                 missing = [e["desc"] for e in stage_def["exit"]

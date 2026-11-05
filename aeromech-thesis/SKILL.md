@@ -5,7 +5,11 @@ description: 航空机械与飞行器维修工程方向的毕业论文/毕业设
 
 # AeroMech Thesis（AMT）
 
-> 版本：v1.7.0（统一论文配图工作流；详细能力和限制见 `references/figure-workflow.md`）。
+## 用户审阅检查点（必须遵守）
+
+正式论文流程必须在研究方案、论文目录、章节内容、配图规划及生成图片各环节展示具体内容并暂停，等待用户明确确认；初始的“一次完成论文”不等于确认未来尚未展示的内容。用户反馈后修改并重新展示，直至确认；不得自行替用户确认，也不得通过手写脚本绕过这些检查。用户只要求草稿时可以交付明确标注的草稿，不得称为已确认的正式交付。方案和目录分别按项目相对路径调用 `python scripts/thesis_review.py <项目目录> plan <文件>`、`outline <文件>`；章节按实际正文文件列表调用 `chapters <文件1> <文件2> ...`。仅在用户确认相应内容后执行，文件变更须重新确认。配图按 `references/figure-workflow.md` 执行，计划及图片均须确认，插入论文另须用户同意。暂停时说明已完成内容及待用户决定的事项，恢复时核对记录和文件内容。
+
+> 版本：v1.7.1（论文审阅检查点与状态流程修正；配图能力和限制见 `references/figure-workflow.md`）。
 
 > 历史版本：v1.6.5（Academic Figure Quality & User-Configured Image Provider：在 v1.6.0 编排闭环之上，图形质量与可选外部生图——① 学术视觉系统（`figure_style.py` 单一来源：3 轮量化验证的调色板/字号阶梯/间距/图类型；`figkit.py` role= 语义角色色 + style_fingerprint 跨图家族一致；mermaid 回退 fail-closed 不伪造语义，自证式 PASS 移除）；② Visual QA（`figure_visual_qa.py` VIS-01~12：可测项机器判定、主观项→人工复核、分数永不覆盖 Critical；入 thesis_build QA 链 + Delivery Gate figure_visual 域）；③ User-Configured Image Provider（可选增强，零阻塞：`image_config.py` 凭据解析链 process→skill→`~/.aeromech/.env` 用户级、project .env 默认关闭、SecretStr 全掩码；`image_cli.py` config/status/test/remove）；④ OpenAI 兼容外部生图（`image_backends.py`：/images/generations b64、原子落盘、8 类错误分类——401=INVALID_CREDENTIAL 不伪装普通失败；可注入 transport，回归零真实网络）；⑤ No-Key Fallback（无 Key=正常状态自动回落既有 Figure Pipeline，UNAVAILABLE≠错误；旧 spec 零 env 接触与 v1.6.0 字节一致；五类确定性图恒 local 优先）；⑥ 受控 AI 生图（`ai_figure_gate.py`：Figure Plan 九字段前置，缺 Plan=FIGURE_PLAN_REQUIRED+零 HTTP；结构化溯源提示词+prompt_hash；provenance 白名单不含凭据；IMAGE_MAX_ATTEMPTS=3 成本闸+首次费用明示）；⑦ AI 生成视觉≠研究证据（research_integrity：ai_generated_visual 禁 verified/partial，证据种子仅 E/DS/CALC/M）；⑧ Secret Security（`secret_leak_qa.py` repo/diff/artifacts 三 scope，发布态 FAIL=0；record/log 边界 redact）；兼容 v1.0~v1.6.0 全部能力，只增不破；发布验证：tests/v1_6_5 124 断言 + v1_4/v1_4_1/v1_5/v1_6/test_a/test_b 全绿 + test-8.0 全 QA PASS + Delivery Gate=PASS + secret_leak_qa FAIL=0 + dev↔install IDENTICAL；已知限制：LIVE_SMOKE_TEST=NOT_RUN（USER_CREDENTIAL_NOT_PROVIDED，非阻塞））
 >
