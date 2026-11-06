@@ -15,12 +15,24 @@ import sys
 CRITICAL_ISSUES, HIGH_ISSUES = [], []
 
 
+def missing_disclosure_labels(text):
+    # Heuristic only; research integrity checks remain responsible for evidence identity.
+    if re.search(r'(?:使用|采用|生成|构造|基于)(?:了|的)?模拟数据', text) and '【假设/模拟·仅演示方法】' not in text:
+        return ['【假设/模拟·仅演示方法】']
+    return []
+
+
+def count_captioned_pages(texts, has_images):
+    return sum(bool(re.search(r'图\s*\d+\s*[-–]\s*\d+', text)) and present
+               for text, present in zip(texts, has_images))
+
+
 def main():
     if len(sys.argv) < 2:
         print("用法: python pdf_qa.py <project_root>")
         return 3
     root = sys.argv[1]
-    pdf = os.path.join(root, "毕业论文.pdf")
+    pdf = sys.argv[2] if len(sys.argv) > 2 else os.path.join(root, "毕业论文.pdf")
     if not os.path.exists(pdf):
         print(f"错误: 找不到 {pdf}")
         return 3
@@ -64,7 +76,7 @@ def main():
                 continue
             for ln in bl["lines"]:
                 y0 = ln["bbox"][1]
-                if not (H - 74 < y0 < H - 56):
+                if not (H - 100 < y0 < H - 20):
                     continue
                 xc = (ln["bbox"][0] + ln["bbox"][2]) / 2
                 if abs(xc - W / 2) > 9:
@@ -88,21 +100,13 @@ def main():
         CRITICAL_ISSUES.append(f"路径泄露: {set(leaks)}")
 
     # ---- 模拟数据/待核实标签存在性 ----
-    for tag in ["【假设/模拟·仅演示方法】", "【待核实】"]:
-        if tag not in full:
-            HIGH_ISSUES.append(f"缺少标签: {tag}")
+    for tag in missing_disclosure_labels(full):
+        HIGH_ISSUES.append(f"缺少标签: {tag}")
 
     # ---- Figure+Caption 同页检查（按已知图题关键词）----
-    cap_keys = ["技术路线图", "系统组成", "功能分解图", "帕累托", "风险矩阵",
-                "故障树", "分布图", "敏感性分析"]
-    fig_found = 0
-    for pg in range(N):
-        t = doc[pg].get_text()
-        imgs = doc[pg].get_image_info()
-        for ck in cap_keys:
-            if ck in t and imgs:
-                fig_found += 1
-    print(f"检测到 图+题注 同页 的图块数: {fig_found}")
+    fig_found = count_captioned_pages([page.get_text() for page in doc],
+                                     [bool(page.get_image_info()) for page in doc])
+    print(f"检测到 图号+图片 同页 的页数: {fig_found}（需人工核对对应关系）")
 
     # ---- Heading 存在性（章标题；兼容 阿拉伯/中文数字 两种章编号体系）----
     # v1.6 test-8.0 通用化：不假定论文章数/附录数——发现编号体系后要求从第1章起

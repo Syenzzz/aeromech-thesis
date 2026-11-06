@@ -19,7 +19,7 @@ def main():
         print("用法: python repaginate_tables.py <project_root>")
         return 2
     root = os.path.abspath(sys.argv[1])
-    docx_path = os.path.join(root, "毕业论文.docx")
+    docx_path = sys.argv[2] if len(sys.argv) > 2 else os.path.join(root, "毕业论文.docx")
     if not os.path.exists(docx_path):
         print(f"错误: 找不到 {docx_path}")
         return 2

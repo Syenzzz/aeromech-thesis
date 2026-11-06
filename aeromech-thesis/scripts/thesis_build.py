@@ -219,7 +219,12 @@ def validate_contract(root, contract=None):
 def _chapter_md(root, rel):
     p = os.path.join(root, ".aeromech", rel)
     with open(p, encoding="utf-8") as f:
-        return f.read()
+        return _chapter_body(f.read())
+
+
+def _chapter_body(text):
+    """Exclude the explicitly delimited chapter review notes from the document."""
+    return re.split(r'(?m)^---\s*\n\s*##\s+本章(?:图表点位|待核实(?:清单|事项))[^\n]*', text, maxsplit=1)[0].rstrip()
 
 
 def _fig_maps(contract, root):
@@ -657,16 +662,18 @@ def pipeline(root, steps=None):
     depend_ok = all(x["status"] in ("PASS", "NOT_APPLICABLE") for x in rec["steps"])
     if "toc" in steps:
         if depend_ok:
-            s = _step(root, "toc", [py, os.path.join(SCRIPTS, "update_toc.py"), root])
+            s = _step(root, "toc", [py, os.path.join(SCRIPTS, "update_toc.py"), root, abs_docx])
             if s["status"] == "ERROR":
                 s["output_tail"] = "Word COM 不可用/环境失败（非内容结论）"
             log_step(s)
+            depend_ok = s['status'] in ('PASS', 'NOT_APPLICABLE')
         else:
             s = {"step": "toc", "status": "SKIPPED_WITH_REASON", "reason": "docx 步骤失败"}
             log_step(s)
     if "repaginate" in steps and depend_ok:
-        log_step(_step(root, "repaginate",
-                       [py, os.path.join(SCRIPTS, "repaginate_tables.py"), root]))
+        s = _step(root, "repaginate", [py, os.path.join(SCRIPTS, "repaginate_tables.py"), root, abs_docx])
+        log_step(s)
+        depend_ok = s['status'] in ('PASS', 'NOT_APPLICABLE')
     # v1.6 test-8.0：Word COM（update_toc/repaginate）往返会剥掉封面表的
     # tblStyle/tblCellMar（v1.3.0 已知缺陷，cover_fidelity --restore 即为此设）；
     # 在导出 PDF 之前恢复，保证成品封面结构与母版一致。
@@ -676,25 +683,26 @@ def pipeline(root, steps=None):
                         "--restore", "--template", tpl_abs, "--docx", abs_docx]))
     if "pdf" in steps:
         if depend_ok:
-            s = _step(root, "pdf", [py, os.path.join(SCRIPTS, "export_pdf.py"), root],
+            s = _step(root, "pdf", [py, os.path.join(SCRIPTS, "export_pdf.py"), root, abs_docx, abs_pdf],
                       timeout=900)
             if s["status"] == "PASS" and os.path.isfile(abs_pdf):
                 rec["artifacts"].append({"artifact": "pdf", "path": out_pdf,
                                          "content_identity": pdf_text_identity(abs_pdf),
                                          "producer": "export_pdf"})
             log_step(s)
+            depend_ok = s['status'] in ('PASS', 'NOT_APPLICABLE')
         else:
             log_step({"step": "pdf", "status": "SKIPPED_WITH_REASON",
                       "reason": "上游失败", "rc": None, "ts": _now()})
     if "finalize" in steps and depend_ok:
         log_step(_step(root, "finalize",
-                       [py, os.path.join(SCRIPTS, "finalize_metadata.py"), root]))
+                       [py, os.path.join(SCRIPTS, "finalize_metadata.py"), root, abs_docx, abs_pdf]))
     if "qa" in steps:
         docx_ok = os.path.isfile(abs_docx)
         pdf_ok = os.path.isfile(abs_pdf)
         chain = [
-            ("pdf_qa", [py, os.path.join(SCRIPTS, "pdf_qa.py"), root], pdf_ok),
-            ("visual_regression", [py, os.path.join(SCRIPTS, "visual_regression.py"), root], pdf_ok),
+            ("pdf_qa", [py, os.path.join(SCRIPTS, "pdf_qa.py"), root, abs_pdf], pdf_ok),
+            ("visual_regression", [py, os.path.join(SCRIPTS, "visual_regression.py"), root, abs_pdf], pdf_ok),
             ("tf_qa", [py, os.path.join(SCRIPTS, "tf_qa.py"),
                        "--template", tpl_abs or "none", "--docx", abs_docx,
                        "--pdf", abs_pdf if pdf_ok else "none", "--out", qa_out], docx_ok),

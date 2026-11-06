@@ -52,8 +52,8 @@ def main():
         print("用法: python finalize_metadata.py <project_root>")
         return 2
     root = sys.argv[1]
-    docx = os.path.join(root, "毕业论文.docx")
-    pdf = os.path.join(root, "毕业论文.pdf")
+    docx = sys.argv[2] if len(sys.argv) > 2 else os.path.join(root, "毕业论文.docx")
+    pdf = sys.argv[3] if len(sys.argv) > 3 else os.path.join(root, "毕业论文.pdf")
     if os.path.exists(docx):
         clean_docx(docx)
         print("DOCX metadata cleaned:", docx)

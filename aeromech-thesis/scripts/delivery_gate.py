@@ -166,11 +166,14 @@ def aggregate(root, write=False):
             "PASS_WITH_HUMAN_REVIEW": ("NEEDS_HUMAN_REVIEW", "high"),
             "BLOCK": ("FAIL", "high"), "ERROR": ("ERROR", "critical")}
     rst, rsev = rmap.get(research["status"], ("ERROR", "critical"))
+    contract = TB.load_contract(root)[0]
+    required_research = bool((contract or {}).get('research', {}).get('required'))
     if legacy_research and rst == "PASS":
-        rst, rsev = "NOT_APPLICABLE", "none"   # 旧项目：研究域未评估，不判 PASS（§十三）
+        rst, rsev = ("FAIL", "high") if required_research else ("NOT_APPLICABLE", "none")
     add("G-RES-01", "research", rst, rsev,
         ["artifacts/qa/research-quality.json", "artifacts/analysis/research-loop-log.json"],
-        ("旧项目：注册表未初始化（v1.4/v1.5 兼容规则，研究域 N/A）" if rst == "NOT_APPLICABLE"
+        ("研究登记未初始化，构建契约要求研究证据" if legacy_research and required_research and rst == "FAIL"
+         else "研究登记未初始化，构建契约未要求研究域（不代表通过）" if rst == "NOT_APPLICABLE"
          else "; ".join(research.get("reasons") or []) or research["status"]),
         REMEDIATION["missing"] if research.get("missing") and rst == "FAIL" else
         (REMEDIATION["nhr"] if rst == "NEEDS_HUMAN_REVIEW" else
@@ -373,7 +376,8 @@ def aggregate(root, write=False):
         add("G-ALL-00", "overall", "FAIL", "high", [],
             "无任何决定性门禁证据（全 N/A=未评估；未执行≠通过）", REMEDIATION["missing"])
     result = {"status": status, "items": items,
-              "research_substatus": research["status"],
+              "research_substatus": ("BLOCK" if rst == "FAIL" else "NOT_APPLICABLE")
+              if legacy_research and research["status"] == "PASS" else research["status"],
               "note": "Research Quality Score 为展示值，不参与放行判定"}
     if write:
         os.makedirs(qad, exist_ok=True)
