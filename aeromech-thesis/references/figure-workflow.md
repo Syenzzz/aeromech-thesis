@@ -19,6 +19,10 @@
 2. 创建项目的 `.aeromech/figures/figure-plan.yaml`，采用 `figure_iface.save_plan` 保存；每图至少包含 `figure_id`、`name`、`kind`、`source`、`out` 和研究链接。论文图统一放在 `.aeromech/artifacts/figures/final/`，输出文件名使用 `fig1-1.png` 形式并对应章节图号，供既有构建和图形 QA 匹配。调用 `figure_workflow.py <root> sync-plan` 列出并登记当前清单，用户确认后调用 `confirm-plan`。任何内容或源文件改变均需重新确认受影响的图。
 3. 研究数据和逻辑图使用确定性方式。`kind=editable` 的 JSON 源为 `nodes`（id/text/x/y/w/h，坐标为厘米；可选 shape=rounded/rectangle/diamond/ellipse、role=normal/medium/high）与 `edges`（from/to，可选 label）；`kind=editable_chart` 的 JSON 源包含 `type`（bar/line）、`categories` 和 `series`（name/values），可选 title/ylabel；`kind=editable_table` 包含 `columns` 与 `rows`，风险矩阵可另提供与 rows 同形状的 `roles`（normal/medium/high）。值必须来自用户材料；无数据时先询问，示意用途须明确标注。输出 PNG、SVG 和含原生对象的 PPTX，源 JSON 一并交付。复杂故障树、事件树或 FMEA 如不能忠实表达时，不得用普通方框冒充合格结果，应改用能准确表达的方法并请用户复核。
 
+   结构图可按需使用 `sections`（每项 `text/x/y/w`，分区标题与分隔线）、节点 `subtitle`（第二行，居中）和 `notes`（每项 `text/x/y/w/h`，独立注释）。连线可使用 `waypoints: [[x,y], ...]` 指定折点，并用 `from_port` / `to_port: [x,y]` 指定节点边界上的连接点；坐标均为厘米。折点顺序和连接关系由规划者给出，不自动推断工程连接。手动设置节点和折点时要检查连线不穿越文字或其他节点，检查输出缩放到论文版心后的字号；图形生成不等同于视觉审核通过。旧源文件仍可使用原有字段。
+
+   风格上优先采用紧凑分区、简短主标题与必要的副标题，控制图形宽度与信息密度，避免过宽导致插入正文后字迹过小；颜色和连接关系须能通过文字、位置或线型辨认，不能只靠颜色。分区和注释只用于确有依据的信息，不将未确认的部件、供电或工程关系画成事实。调整后的图片仍应按本工作流重新向用户展示并确认。
+
    故障树将计划 `type` 设置为 `fault_tree`，节点的 `semantic` 必须明确标注 `top_event`、`gate` 或 `basic_event`；逻辑门文字标明 AND/OR，且门指向至少两个输入事件。该工具使用文字标识逻辑门，若学校或标准要求专用门符号，应采用支持相应符号的绘图工具。
 4. 概念插图可用已配置的外部图像服务。项目开始时说明提供商、可能发送的内容和费用；用户授权后运行 `external-policy --allow yes --max-calls N`。不允许发送时设为 `no`。项目额度跨图累计，未授权或耗尽不能调用。外部类型与 Figure Plan 的必填字段见 `references/image-provider.md`。AI 图是示意素材，不是研究证据；不能确定的工程细节不得表现为真实结构。
 5. 调用 `figure_iface.py <root> generate --figure FIG-ID`；已有图片在清单中使用 `kind=user_asset` 和项目内 `out` 路径，计划确认后执行 `adopt-existing --figure FIG-ID` 登记来源。然后用 `figure_workflow.py <root> status` 列出图片和状态，向用户展示实际图片。反复处理反馈，默认只改指定图；需要跨图调整时先告知并征求决定。确认某图时运行 `confirm-image --figure FIG-ID`，修改后须重新确认。

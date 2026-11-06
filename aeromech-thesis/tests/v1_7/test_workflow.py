@@ -125,6 +125,30 @@ class WorkflowTests(unittest.TestCase):
                 json.dump({'nodes': []}, f)
             self.assertEqual(FI.generate_figure(root, 'FIG-1')['reason'], 'PLAN_CONFIRMATION_REQUIRED')
 
+    def test_editorial_source_respects_review_gate(self):
+        import json
+        with tempfile.TemporaryDirectory() as root:
+            source = {'nodes': [{'id': 'a', 'text': 'Sensor', 'subtitle': 'Input', 'x': 1, 'y': 2, 'w': 3, 'h': 2},
+                                {'id': 'b', 'text': 'Control', 'x': 6, 'y': 4, 'w': 3, 'h': 2}],
+                      'sections': [{'text': 'Input', 'x': 1, 'y': .5, 'w': 3}],
+                      'notes': [{'text': 'Draft', 'x': 1, 'y': 7, 'w': 3, 'h': 1}],
+                      'edges': [{'from': 'a', 'to': 'b', 'waypoints': [[5, 3], [5, 5]], 'to_port': [6, 5]}]}
+            path = os.path.join(root, 'source.json')
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(source, f)
+            spec = {'figure_id': 'FIG-1', 'kind': 'editable', 'source': 'source.json', 'out': 'figure.png'}
+            FI.save_plan(root, [spec])
+            review.save_plan(root, [spec])
+            self.assertEqual(FI.generate_figure(root, 'FIG-1')['reason'], 'PLAN_CONFIRMATION_REQUIRED')
+            review.confirm_plan(root)
+            self.assertEqual(FI.generate_figure(root, 'FIG-1')['status'], 'GENERATED')
+            review.confirm_image(root, 'FIG-1', os.path.join(root, 'figure.png'))
+            source['sections'][0]['text'] = 'Changed'
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(source, f)
+            self.assertFalse(review.figure_plan_confirmed(root, 'FIG-1', [spec]))
+            self.assertFalse(review.image_ready(root, 'FIG-1', os.path.join(root, 'figure.png'), [spec]))
+
     def test_plan_confirmation_and_changed_image(self):
         with tempfile.TemporaryDirectory() as root:
             spec = {'figure_id': 'FIG-1', 'name': 'test', 'kind': 'none'}
