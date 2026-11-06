@@ -16,7 +16,7 @@ def main():
         print("用法: python visual_regression.py <project_root>")
         return 1
     root = sys.argv[1]
-    pdf = os.path.join(root, "毕业论文.pdf")
+    pdf = sys.argv[2] if len(sys.argv) > 2 and not sys.argv[2].startswith('--') else os.path.join(root, "毕业论文.pdf")
     if not os.path.exists(pdf):
         print(f"错误: 找不到 {pdf}")
         return 1

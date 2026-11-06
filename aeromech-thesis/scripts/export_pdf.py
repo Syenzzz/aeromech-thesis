@@ -14,8 +14,8 @@ def main():
         print("用法: python export_pdf.py <project_root>")
         return 1
     root = sys.argv[1]
-    docx_path = os.path.join(root, "毕业论文.docx")
-    pdf_path = os.path.join(root, "毕业论文.pdf")
+    docx_path = sys.argv[2] if len(sys.argv) > 2 else os.path.join(root, "毕业论文.docx")
+    pdf_path = sys.argv[3] if len(sys.argv) > 3 else os.path.join(root, "毕业论文.pdf")
     if not os.path.exists(docx_path):
         print(f"错误: 找不到 {docx_path}")
         return 1
